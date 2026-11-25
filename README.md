@@ -45,6 +45,19 @@ Disco cheio e você não sabe o que apagar? O **disk-declutter** varre as unidad
 
    Os botões “todos” pedem para digitar `APAGAR TUDO`, `DESINSTALAR TUDO` ou `APAGAR E DESINSTALAR TUDO`, conforme o grupo. Quando há arquivos e programas na mesma ação, os arquivos são apagados primeiro e os programas desinstalados por último, um por vez.
 
+### Andamento, abortar e permissões
+
+- **Painel de andamento fixo no topo** (nunca coberto pelo rodapé): barra de progresso com **`NN% / 100%`**, itens concluídos, e — como a janela de cópia do Windows — para o item em andamento: **o que está fazendo, quanto já foi, quanto falta, MB/s e tempo restante**, mais o total da operação e o tempo estimado para concluir tudo. A mesma informação aparece na **linha do item** (“⏳ em andamento… Copiando · 8,2 GB de 21,1 GB · faltam 12,9 GB · 5,3 MB/s · ~38 min restantes”); os que ainda não começaram aparecem como “⏳ na fila”.
+- **Abortar operação** (botão no painel de andamento): cancela onde estiver. *Mover*: a cópia parcial é apagada do destino e a **origem fica intacta**. *Apagar*: o que já foi apagado não volta; o resto fica como está. *Desinstalar*: um desinstalador já aberto não é interrompido (feche a janela dele); os próximos são cancelados. Depois, **escaneie o disco de novo** (há um botão “Reescanear”) e a lista mostra só o que restou.
+- **Política de permissões — o painel pausa e pergunta** quando precisa de uma autorização sua:
+  | Situação | O que ele pergunta |
+  |---|---|
+  | A **Lixeira recusa** o item (acesso negado) | Apagar **definitivamente** ou pular |
+  | Arquivos **em uso / acesso negado** | **Tentar de novo** (feche antes o programa), **assumir a propriedade e apagar** (só no modo administrador) ou pular |
+  | Desinstalador que **exige administrador** | Avisa e **não** marca como removido (use `iniciar-admin.bat`) |
+
+  Cada pergunta tem a opção “aplicar a todos os próximos casos iguais nesta operação”. Itens sem resposta em 30 min são pulados. O que foi pulado/parcial aparece com ⏭ / ⚠ na lista e no log.
+
 ### ⚠️ Desinstalar programas pode exigir administrador
 
 - Os desinstaladores abrem a **janela do próprio programa** e você confirma nela. O painel confere no registro do Windows se o programa realmente saiu.
@@ -133,6 +146,8 @@ Issues e PRs são bem-vindos — principalmente novos caches conhecidos, ajustes
 3. Each item's **path is a clickable link**: one click opens Windows Explorer with the file/folder already selected, so you can check it before deciding.
 4. Two checkbox columns — **Delete / Uninstall** and **Move** — plus a **“Transferir pasta para outro local”** button that opens the Explorer folder picker and shows the chosen path next to the button. **An installed program's folder is never offered for deletion or moving** (moving would need an uninstall + reinstall): programs and games are offered **for uninstall only**, through their own uninstaller (Steam games through Steam). Folders/files that belong to an installed program, or that contain one, are skipped by the scan.
 5. Eight footer buttons in **three groups** separated by a vertical bar (apply to the **current tab only**): *Files and folders* (delete all files · delete selected files · move specified · delete selected and move), *Programs — uninstall only* (uninstall all programs · uninstall selected programs) and *Files + programs* (delete all files and uninstall programs · delete selected files and programs). The “all” buttons require typing `APAGAR TUDO`, `DESINSTALAR TUDO` or `APAGAR E DESINSTALAR TUDO`. Files go first, programs last, one at a time.
+
+Progress & control: a fixed top bar shows a progress bar (`NN% / 100%`), and — like the Windows copy dialog — what is being done, bytes done/remaining, MB/s and time left, also shown on each item's row (queued items show “na fila”). **Abortar operação** cancels wherever it is (a partial copy is removed and the source is untouched). **Permission policy:** when the Recycle Bin refuses an item, files are in use/denied, or elevation is needed, the panel pauses and asks (delete permanently / retry / take ownership as admin / skip, with “apply to all”).
 
 > ⚠️ **Uninstalling programs may require administrator rights.** Uninstallers open the program's own window. Programs installed *for all users* (most of `Program Files`) usually need admin: the panel tags them *“desinstalar pode exigir administrador”* and shows a banner. To avoid errors start the panel as administrator (`app\iniciar-admin.bat`, or choose “Como administrador” in the skill) — Windows shows a UAC prompt that only you can approve. In normal mode you can still try; if the uninstaller needs elevation the panel reports *“exige ADMINISTRADOR (código 740)”* and does **not** mark the program as removed.
 

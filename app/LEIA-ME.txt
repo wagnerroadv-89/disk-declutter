@@ -14,6 +14,11 @@ Como usar
      ATENCAO: desinstalar programas pode exigir ADMINISTRADOR. Programas instalados para todos os usuarios (a maioria,
      em Program Files) costumam pedir isso: use iniciar-admin.bat (o Windows mostra o UAC, que so voce aprova).
      Os botoes ficam em 3 grupos: Arquivos e pastas | Programas (so desinstalar) | Arquivos + programas.
+  3d. ANDAMENTO: painel fixo no topo com barra "NN% / 100%", MB/s, quanto ja foi, quanto falta e tempo restante (tambem na
+     linha de cada item; os que nao comecaram ficam "na fila"). Botao "Abortar operacao" cancela onde estiver (mover: a
+     copia parcial some e a origem fica intacta). Depois use "Reescanear" para ver so o que restou.
+     PERMISSOES: quando a Lixeira recusa um item, arquivos estao em uso/acesso negado ou falta administrador, o painel
+     PAUSA e pergunta (apagar definitivamente / tentar de novo / assumir propriedade [admin] / pular; "aplicar a todos").
   3c. MOVER para o mesmo lugar: depois de escolher um destino aparece o botao "Usar este local para os demais arquivos
      selecionados para mover?" com status Nao/Sim (padrao Nao). Em Sim, tudo que voce marcar em "Mover" depois ja recebe
      esse caminho. Escolher um segundo local diferente volta para Nao. Em Nao, ao marcar "Mover" um popup oferece os

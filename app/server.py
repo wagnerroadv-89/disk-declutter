@@ -16,6 +16,7 @@ import scanner
 LOG_FILE = os.environ.get("LIMPEZA_LOG", os.path.join(HERE, "limpeza.log"))
 TEST_PICK = os.environ.get("LIMPEZA_TEST_PICK")          # so para testes automatizados
 _TEST_PICK_N = [0]
+TEST_FAIL_RECYCLE = os.environ.get("LIMPEZA_TEST_FAIL_RECYCLE")    # so para testes: finge que a Lixeira recusou o item
 FIXTURE = os.environ.get("LIMPEZA_FIXTURE")              # so para testes: adiciona um disco falso "T:"
 PORT = int(os.environ.get("LIMPEZA_PORT", "8765"))
 TOKEN = secrets.token_urlsafe(24)
@@ -46,7 +47,7 @@ def is_idle():
 def reset_state(why):
     global EPOCH
     with ITEMS_LOCK:
-        ITEMS.clear(); STATE.clear(); SCANS.clear(); JOBS.clear()
+        ITEMS.clear(); STATE.clear(); SCANS.clear(); JOBS.clear(); CTXS.clear()
     EPOCH += 1
     log("Estado do painel descartado (%s). Próxima abertura exige novo scan." % why)
 
@@ -164,13 +165,22 @@ def to_recycle_bin(path):
         raise OSError("A Lixeira recusou o item (código %s). Talvez esteja em uso." % r)
 
 
-def rm_permanent(path):
-    """Apaga arquivo/pasta SEM seguir junctions/links. Retorna o numero de falhas."""
+class JobAborted(Exception):
+    """O usuario clicou em "Abortar operacao"."""
+
+
+def rm_permanent(path, ctx=None, fails=None, abortable=True):
+    """Apaga arquivo/pasta SEM seguir junctions/links. Retorna o numero de falhas; `fails` recebe (caminho, erro).
+    Com `ctx`, conta os bytes apagados (progresso) e, se `abortable`, confere o botao "Abortar" a cada item."""
+    if ctx and abortable:
+        ctx.check()
     try:
         st = os.lstat(path)
     except FileNotFoundError:
         return 0
-    except OSError:
+    except OSError as e:
+        if fails is not None:
+            fails.append((path, str(e)))
         return 1
     failed = 0
     is_link = bool(getattr(st, "st_file_attributes", 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT)
@@ -178,14 +188,18 @@ def rm_permanent(path):
         try:
             with os.scandir(path) as it:
                 children = [e.path for e in it]
-        except OSError:
+        except OSError as e:
+            if fails is not None:
+                fails.append((path, str(e)))
             return 1
         for c in children:
-            failed += rm_permanent(c)
+            failed += rm_permanent(c, ctx, fails, abortable)
         try:
             os.rmdir(path)
-        except OSError:
+        except OSError as e:
             failed += 1
+            if fails is not None:
+                fails.append((path, str(e)))
     else:
         try:
             os.chmod(path, stat.S_IWRITE)
@@ -196,19 +210,23 @@ def rm_permanent(path):
                 os.rmdir(path)      # junction / link de pasta
             else:
                 os.remove(path)
-        except OSError:
+                if ctx:
+                    ctx.add_bytes(st.st_size)       # progresso: bytes ja apagados
+        except OSError as e:
             failed += 1
+            if fails is not None:
+                fails.append((path, str(e)))
     return failed
 
 
-def clear_contents(path):
+def clear_contents(path, ctx=None, fails=None):
     failed = 0
     try:
         names = os.listdir(path)
     except OSError as e:
         raise OSError("Não foi possível ler a pasta: %s" % e)
     for n in names:
-        failed += rm_permanent(os.path.join(path, n))
+        failed += rm_permanent(os.path.join(path, n), ctx, fails)
     return failed
 
 
@@ -230,8 +248,45 @@ def empty_recycle_bin():
     return r & 0xFFFFFFFF
 
 
-def do_delete(it, recycle, jlog):
-    """Retorna (bytes_liberados, status, mensagem)."""
+def take_ownership(path, ctx):
+    """Administrador: assume a propriedade e concede controle total aos Administradores (takeown + icacls)."""
+    isdir = os.path.isdir(path)
+    ok = False
+    for ans in ("Y", "S"):                      # o takeown pede Y/N (ingles) ou S/N (portugues) conforme o idioma do Windows
+        cmd = ["takeown", "/f", path] + (["/r", "/d", ans] if isdir else [])
+        r = subprocess.run(cmd, capture_output=True, text=True)
+        if r.returncode == 0:
+            ok = True
+            break
+    cmd = ["icacls", path, "/grant", "*S-1-5-32-544:(OI)(CI)F", "/c", "/q"] + (["/t"] if isdir else [])
+    r2 = subprocess.run(cmd, capture_output=True, text=True)
+    ctx.log("Propriedade/permissão ajustadas em %s (takeown %s, icacls %s)." % (path, "ok" if ok else "falhou", "ok" if r2.returncode == 0 else "falhou"))
+
+
+def remove_with_policy(it, ctx, remove):
+    """remove(fails) -> numero de falhas. Se algo nao puder ser apagado (em uso / acesso negado), PAUSA e pergunta ao usuario:
+    tentar de novo, assumir a propriedade (so administrador) ou pular. Retorna o numero de falhas que restou."""
+    failed = 0
+    for _ in range(4):
+        fails = []
+        failed = remove(fails)
+        if not failed:
+            return 0
+        sample = "; ".join("%s (%s)" % (os.path.basename(p) or p, e.split("]")[-1].strip()[:60]) for p, e in fails[:3])
+        opts = [("retry", "Tentar de novo (feche antes o programa que está usando estes arquivos)")]
+        if is_admin():
+            opts.append(("own", "Assumir a propriedade e apagar (administrador)"))
+        opts.append(("skip", "Pular — deixar o que sobrou"))
+        ch = ctx.ask(it, "locked", "%d arquivo(s) de “%s” não puderam ser apagados (em uso ou acesso negado). Ex.: %s" % (failed, it["name"], sample), opts)
+        if ch == "own":
+            take_ownership(it["path"], ctx)
+        elif ch != "retry":
+            return failed
+    return failed
+
+
+def do_delete(it, recycle, ctx):
+    """Retorna (bytes_liberados, status, mensagem). status: ok | info | parcial | pulado."""
     path = it["path"]; kind = it["kind"]
     if it.get("admin") and not is_admin():
         raise PermissionError("Requer executar como administrador (use iniciar-admin.bat).")
@@ -240,7 +295,8 @@ def do_delete(it, recycle, jlog):
         if not cmd:
             raise RuntimeError("Este programa não informa comando de desinstalação.")
         cmd = re.sub(r"(?i)(msiexec(?:\.exe)?\s+)/I", r"\1/X", cmd)
-        jlog("Abrindo o desinstalador (confirme na janela que aparecer): " + cmd)
+        ctx.phase("Aguardando o desinstalador (confirme na janela dele)")
+        ctx.log("Abrindo o desinstalador (confirme na janela que aparecer): " + cmd)
         rc = subprocess.run(cmd, shell=True).returncode
         if it.get("steam"):
             return 0, "info", "Pedido enviado ao Steam: confirme a desinstalação na janela do Steam."
@@ -262,26 +318,37 @@ def do_delete(it, recycle, jlog):
     if is_protected(path, it.get("trusted", False)):
         raise PermissionError("Caminho protegido, recusado.")
     direct = it["cat"].startswith("Cache") or kind == "conteudo"
+    ctx.phase("Apagando", copy_size=it["size"])
     if kind == "conteudo":
-        failed = clear_contents(path)
+        failed = remove_with_policy(it, ctx, lambda f: clear_contents(path, ctx, f))
         if failed:
-            raise RuntimeError("Limpo parcialmente: %d item(ns) em uso foram ignorados." % failed)
+            return 0, "parcial", "Limpo parcialmente: %d item(ns) ficaram (em uso ou acesso negado)." % failed
         return it["size"], "ok", "Limpo"
     if recycle and not direct:
-        to_recycle_bin(path)
-    else:
-        failed = rm_permanent(path)
-        if failed:
-            raise RuntimeError("Apagado parcialmente: %d arquivo(s) em uso." % failed)
+        try:
+            if TEST_FAIL_RECYCLE:
+                raise OSError("falha simulada para teste")
+            to_recycle_bin(path)
+            return it["size"], "ok", "Apagado"
+        except OSError as e:
+            ch = ctx.ask(it, "recycle", "O Windows recusou enviar “%s” para a Lixeira (%s). Quer apagar DEFINITIVAMENTE, sem passar pela Lixeira?" % (it["name"], e),
+                         [("perm", "Apagar definitivamente (sem Lixeira)"), ("skip", "Pular este item")])
+            if ch != "perm":
+                return 0, "pulado", "Pulado: a Lixeira recusou o item e você preferiu não apagar definitivamente."
+    failed = remove_with_policy(it, ctx, lambda f: rm_permanent(path, ctx, f))
+    if failed:
+        return 0, "parcial", "Apagado parcialmente: %d arquivo(s) ficaram (em uso ou acesso negado)." % failed
     return it["size"], "ok", "Apagado"
 
 
 # ---------------------------------------------------------------- mover
-def tree_stats(path):
+def tree_stats(path, ctx=None):
     n = 0; s = 0
     if os.path.isfile(path):
         return 1, os.path.getsize(path)
     for root, dirs, files in os.walk(path):
+        if ctx:
+            ctx.check()
         for f in files:
             try:
                 s += os.path.getsize(os.path.join(root, f)); n += 1
@@ -290,7 +357,52 @@ def tree_stats(path):
     return n, s
 
 
-def do_move(it, dest, junction, jlog):
+def copy_tree(src, dst, ctx):
+    """Copia arquivo ou pasta reportando bytes copiados (progresso) e respeitando "Abortar" a cada bloco de 8 MB."""
+    done = [0]
+
+    def cp_file(s, d):
+        with open(s, "rb") as fi, open(d, "wb") as fo:
+            while True:
+                ctx.check()
+                buf = fi.read(8 * 1024 * 1024)
+                if not buf:
+                    break
+                fo.write(buf)
+                done[0] += len(buf)
+                ctx.progress(done[0])
+        try:
+            shutil.copystat(s, d)
+        except OSError:
+            pass
+
+    def walk(s, d):
+        os.makedirs(d, exist_ok=True)
+        with os.scandir(s) as it:
+            entries = list(it)
+        for e in entries:
+            ctx.check()
+            sp = e.path; dp = os.path.join(d, e.name)
+            if e.is_symlink():
+                try:
+                    os.symlink(os.readlink(sp), dp, target_is_directory=e.is_dir())
+                except OSError:
+                    pass                # link simbolico que nao da para recriar: ignorado
+            elif e.is_dir():
+                walk(sp, dp)
+            else:
+                cp_file(sp, dp)
+        try:
+            shutil.copystat(s, d)
+        except OSError:
+            pass
+    if os.path.isdir(src):
+        walk(src, dst)
+    else:
+        cp_file(src, dst)
+
+
+def do_move(it, dest, junction, ctx):
     src = it["path"]
     if not it.get("movable"):
         raise PermissionError("Este item não pode ser movido.")
@@ -305,7 +417,8 @@ def do_move(it, dest, junction, jlog):
         raise ValueError("O destino não pode estar dentro da própria pasta de origem.")
     if os.path.splitdrive(src)[0].upper() == os.path.splitdrive(dest)[0].upper():
         raise ValueError("O destino está no mesmo disco; não libera espaço. Escolha outro disco.")
-    n0, s0 = tree_stats(src)
+    ctx.phase("Medindo a origem…")
+    n0, s0 = tree_stats(src, ctx)
     free = shutil.disk_usage(dest).free
     if free < s0 * 1.02 + 50 * 2**20:
         raise OSError("Espaço insuficiente no destino (livre %s, precisa %s)." % (human(free), human(s0)))
@@ -314,31 +427,31 @@ def do_move(it, dest, junction, jlog):
     while os.path.exists(target):
         base, ext = os.path.splitext(os.path.basename(src)) if os.path.isfile(src) else (os.path.basename(src), "")
         target = os.path.join(dest, "%s (%d)%s" % (base, k, ext)); k += 1
-    jlog("Copiando %s (%s) para %s ..." % (src, human(s0), target))
+    ctx.log("Copiando %s (%s) para %s ..." % (src, human(s0), target))
+    ctx.phase("Copiando", copy_size=s0, base=0.0, span=0.9)
     try:
-        if os.path.isdir(src):
-            shutil.copytree(src, target, symlinks=True)
-        else:
-            shutil.copy2(src, target)
-    except Exception:
-        jlog("Falha ao copiar; removendo cópia parcial do destino.")
+        copy_tree(src, target, ctx)
+        ctx.phase("Verificando a cópia…")
+        n1, s1 = tree_stats(target, ctx)
+    except BaseException as e:          # abortado, erro de leitura/escrita, etc.: a origem NAO foi tocada
+        ctx.log("Cópia interrompida (%s); removendo a cópia parcial do destino. A origem continua intacta." % type(e).__name__)
         if os.path.exists(target):
             rm_permanent(target)
         raise
-    n1, s1 = tree_stats(target)
     if (n0, s0) != (n1, s1):
         rm_permanent(target)
         raise OSError("Verificação falhou (origem %d arq/%s; cópia %d arq/%s). Origem mantida." % (n0, human(s0), n1, human(s1)))
-    jlog("Cópia verificada (%d arquivos, %s). Removendo a origem ..." % (n1, human(s1)))
-    failed = rm_permanent(src)
+    ctx.log("Cópia verificada (%d arquivos, %s). Removendo a origem ..." % (n1, human(s1)))
+    ctx.phase("Removendo a origem (etapa não interrompível)", copy_size=s0, base=0.9, span=0.1)
+    failed = remove_with_policy(it, ctx, lambda f: rm_permanent(src, ctx, f, False))
     if failed:
-        raise RuntimeError("Copiado para %s, mas %d arquivo(s) da origem estão em uso e não foram removidos." % (target, failed))
+        raise RuntimeError("Copiado para %s, mas %d arquivo(s) da origem não foram removidos (em uso ou acesso negado)." % (target, failed))
     if junction and os.path.isdir(target):
         r = subprocess.run(["cmd", "/c", "mklink", "/J", src, target], capture_output=True, text=True)
         if r.returncode != 0:
-            jlog("Aviso: não consegui criar o atalho (junction): " + (r.stdout + r.stderr).strip())
+            ctx.log("Aviso: não consegui criar o atalho (junction): " + (r.stdout + r.stderr).strip())
             return s0, target + " (sem atalho no local antigo)"
-        jlog("Atalho (junction) criado em %s -> %s" % (src, target))
+        ctx.log("Atalho (junction) criado em %s -> %s" % (src, target))
     return s0, target
 
 
@@ -347,43 +460,152 @@ def drives_free():
     return {d["letter"]: {"free": d["free"], "total": d["total"]} for d in list_drives()}
 
 
-def run_job(job, plan, empty_bin=False):
-    def jlog(m):
-        job["log"].append(m); log(m)
+CTXS = {}    # job id -> JobCtx
+
+
+class JobCtx:
+    """Contexto de um job: log, progresso, botao Abortar e perguntas ao usuario (politica de permissoes)."""
+
+    def __init__(self, job):
+        self.job = job
+        self.abort = threading.Event()
+        self.answered = threading.Event()
+        self.answer = None
+        self.remember = {}          # tipo de pergunta -> escolha ("aplicar a todos os proximos casos iguais")
+
+    def log(self, m):
+        self.job["log"].append(m); log(m)
+
+    def check(self):
+        if self.abort.is_set():
+            raise JobAborted()
+
+    def phase(self, text, copy_size=None, base=0.0, span=1.0):
+        """base/span: que fatia (0..1) do item esta etapa representa na barra (ex.: copiar = 0..0.9, remover a origem = 0.9..1)."""
+        cur = self.job.get("cur")
+        if cur is not None:
+            cur["phase"] = text
+            if copy_size is not None:
+                cur["copy_size"] = copy_size; cur["t_copy"] = time.time(); cur["base"] = base; cur["span"] = span
+        self.job["cur_done"] = 0
+
+    def progress(self, done):
+        self.job["cur_done"] = done
+
+    def add_bytes(self, n):
+        self.job["cur_done"] = self.job.get("cur_done", 0) + n
+
+    def ask(self, it, kind, msg, options, allow_all=True, timeout=1800):
+        """Pausa o job e pergunta ao usuario na pagina. options = [(id, rotulo)]. Retorna o id escolhido."""
+        if kind in self.remember:
+            return self.remember[kind]
+        pid = uuid.uuid4().hex[:8]
+        self.answered.clear(); self.answer = None
+        self.job["prompt"] = {"pid": pid, "item": it["name"], "kind": kind, "msg": msg, "allow_all": allow_all,
+                              "options": [{"id": i, "label": l} for i, l in options]}
+        self.log("PERGUNTA (%s): %s" % (it["name"], msg))
+        t_end = time.time() + timeout
+        try:
+            while not self.answered.wait(0.4):
+                self.check()
+                if time.time() > t_end:
+                    self.log("Sem resposta em %d min; item pulado." % (timeout // 60))
+                    return "skip" if any(i == "skip" for i, _ in options) else options[-1][0]
+        finally:
+            self.job["prompt"] = None
+        choice, all_ = self.answer
+        if all_ and allow_all:
+            self.remember[kind] = choice
+        self.log("Resposta: %s%s" % (choice, " (para todos os próximos casos iguais)" if all_ else ""))
+        return choice
+
+    def decide(self, pid, choice, all_):
+        p = self.job.get("prompt")
+        if not p or p["pid"] != pid or choice not in [o["id"] for o in p["options"]]:
+            return False
+        self.answer = (choice, bool(all_)); self.answered.set()
+        return True
+
+
+def run_job(job, ctx, plan, empty_bin=False):
     freed_total = 0
+    job["w_total"] = sum(max(it["size"], 2**20) for _, it, _ in plan)
     try:
-        for kind, it, arg in plan:
+        for idx, (kind, it, arg) in enumerate(plan):
             iid = it["id"]
+            if ctx.abort.is_set():                     # abortado entre itens: o resto nem comeca
+                for _, rest, _ in plan[idx:]:
+                    job["results"][rest["id"]] = {"status": "cancelado", "msg": "Cancelado antes de começar.", "freed": 0}
+                break
+            w = max(it["size"], 2**20)
             job["current"] = iid
+            verb = "Movendo" if kind == "move" else ("Desinstalando" if it["kind"] == "programa" else "Apagando")
+            job["cur"] = {"name": it["name"], "verb": verb, "phase": "Iniciando…", "size": it["size"], "w": w, "copy_size": None, "t_copy": None}
+            job["cur_done"] = 0
             try:
                 if kind == "delete":
-                    jlog("%s: %s" % ("Desinstalando" if it["kind"] == "programa" else "Apagando", it["name"]))
-                    freed, status, msg = do_delete(it, arg["recycle"], jlog)
+                    ctx.log("%s: %s" % ("Desinstalando" if it["kind"] == "programa" else "Apagando", it["name"]))
+                    freed, status, msg = do_delete(it, arg["recycle"], ctx)
                     res = {"status": status, "msg": msg, "freed": freed}
                 else:
-                    jlog("Movendo: %s" % it["name"])
-                    freed, target = do_move(it, arg["dest"], arg["junction"], jlog)
+                    ctx.log("Movendo: %s" % it["name"])
+                    freed, target = do_move(it, arg["dest"], arg["junction"], ctx)
                     res = {"status": "ok", "msg": "Movido para " + target, "freed": freed}
                 job["results"][iid] = res
                 if res["status"] == "ok":
                     STATE[iid] = res
                 freed_total += freed
-                jlog("OK: %s" % it["name"])
+                ctx.log("%s: %s" % ({"ok": "OK", "info": "INFO", "parcial": "PARCIAL", "pulado": "PULADO"}.get(res["status"], res["status"]), it["name"]))
+            except JobAborted:
+                job["pct_frozen"] = job_view(job)["pct"]       # a barra fica onde parou
+                job["results"][iid] = {"status": "cancelado", "msg": "Cancelado durante a operação (o que já tinha sido apagado não volta; a origem de um 'mover' não é tocada).", "freed": 0}
+                ctx.log("CANCELADO em %s" % it["name"])
+                for _, rest, _ in plan[idx + 1:]:
+                    job["results"][rest["id"]] = {"status": "cancelado", "msg": "Cancelado antes de começar.", "freed": 0}
+                break
             except Exception as e:
                 job["results"][iid] = {"status": "erro", "msg": str(e), "freed": 0}
-                jlog("ERRO em %s -> %s: %s" % (it["name"], type(e).__name__, e))
-        if empty_bin:
+                ctx.log("ERRO em %s -> %s: %s" % (it["name"], type(e).__name__, e))
+            job["w_done"] += w
+            job["items_done"] += 1
+        job["aborted"] = ctx.abort.is_set()
+        if empty_bin and not job["aborted"]:
             if any(k == "delete" and it["kind"] != "programa" for k, it, _ in plan):     # so se apagou arquivos (nao so desinstalou)
-                jlog("Esvaziando a Lixeira do Windows ...")
+                ctx.log("Esvaziando a Lixeira do Windows ...")
                 code = empty_recycle_bin()
-                jlog("Lixeira esvaziada." if code == 0 else "Aviso: não consegui esvaziar a Lixeira (código 0x%X)." % code)
+                ctx.log("Lixeira esvaziada." if code == 0 else "Aviso: não consegui esvaziar a Lixeira (código 0x%X)." % code)
             else:
-                jlog("Esvaziar a Lixeira ignorado: esta operação não apagou nada.")
+                ctx.log("Esvaziar a Lixeira ignorado: esta operação não apagou nada.")
     finally:
-        job["current"] = None
+        job["current"] = None; job["cur"] = None; job["prompt"] = None
         job["done"] = True
         job["freed"] = freed_total
-        jlog("Concluído. Espaço liberado (estimado): %s" % human(freed_total))
+        ctx.log("%s. Espaço liberado (estimado): %s" % ("Operação ABORTADA" if job.get("aborted") else "Concluído", human(freed_total)))
+
+
+def job_view(j):
+    """Copia do job com campos calculados: percentual, velocidade e tempo restante da copia atual."""
+    v = dict(j)
+    cur = j.get("cur")
+    part = 0.0
+    if cur and cur.get("copy_size"):
+        frac = min(1.0, j.get("cur_done", 0) / max(cur["copy_size"], 1))
+        part = (cur.get("base", 0.0) + cur.get("span", 1.0) * frac) * cur["w"]
+        el = time.time() - (cur.get("t_copy") or time.time())
+        if el > 2 and j.get("cur_done", 0) > 0:
+            spd = j["cur_done"] / el
+            v["speed"] = spd
+            v["eta"] = max(0.0, (cur["copy_size"] - j["cur_done"]) / spd)
+    total = max(j.get("w_total", 1), 1)
+    v["bytes_done"] = j["w_done"] + part          # progresso do job inteiro, em bytes (itens pequenos contam >= 1 MB)
+    v["bytes_total"] = total
+    v["pct"] = 100.0 if (j["done"] and not j.get("aborted")) else min(99.9, 100.0 * (j["w_done"] + part) / total)
+    if j["done"] and j.get("aborted"):
+        v["pct"] = j.get("pct_frozen", v["pct"])
+    if v.get("speed"):
+        v["eta_total"] = max(0.0, (total - v["bytes_done"]) / v["speed"])      # tempo estimado para concluir TUDO
+    v["elapsed"] = time.time() - j["t0"]
+    return v
 
 
 def pick_folder():
@@ -447,7 +669,8 @@ def public_state():
         items = [it for it in ITEMS.values()]
     scans = {k: {x: v for x, v in s.items() if x != "ids"} for k, s in SCANS.items()}
     return {"drives": list_drives(), "scans": scans, "items": items, "state": STATE, "admin": is_admin(),
-            "epoch": EPOCH, "ttl": TTL, "now": time.time()}
+            "epoch": EPOCH, "ttl": TTL, "now": time.time(),
+            "active_job": next((j["id"] for j in JOBS.values() if not j["done"]), None)}
 
 
 # ---------------------------------------------------------------- HTTP
@@ -496,7 +719,7 @@ class H(http.server.BaseHTTPRequestHandler):
             j = JOBS.get(jid)
             if not j:
                 return self._send(404, {"erro": "job não encontrado"})
-            return self._send(200, dict(j, drives=drives_free()))
+            return self._send(200, dict(job_view(j), drives=drives_free()))
         self._send(404, {"erro": "não encontrado"})
 
     def do_POST(self):
@@ -526,6 +749,18 @@ class H(http.server.BaseHTTPRequestHandler):
                 return self._send(200, {"started": start_scans([str(x) for x in letters])})
             except ValueError as e:
                 return self._send(400, {"erro": str(e)})
+        if path == "/api/abort":                     # botao "Abortar operacao"
+            ctx = CTXS.get(str(body.get("job") or ""))
+            if not ctx or ctx.job.get("done"):
+                return self._send(404, {"erro": "Nenhuma operação em andamento."})
+            ctx.abort.set(); ctx.job["aborting"] = True
+            ctx.log("ABORTAR solicitado pelo usuário.")
+            return self._send(200, {"ok": True})
+        if path == "/api/decision":                  # resposta a uma pergunta de permissao
+            ctx = CTXS.get(str(body.get("job") or ""))
+            if not ctx or not ctx.decide(str(body.get("pid") or ""), str(body.get("choice") or ""), body.get("all")):
+                return self._send(400, {"erro": "Pergunta inválida ou já respondida."})
+            return self._send(200, {"ok": True})
         if path == "/api/reveal":
             return self._reveal(body)
         if path == "/api/run":
@@ -603,12 +838,16 @@ class H(http.server.BaseHTTPRequestHandler):
         plan = [("delete", ITEMS[i], {"recycle": recycle}) for i in dels]
         plan += [("move", ITEMS[i], {"dest": d, "junction": junction}) for i, d in moves.items()]
         jid = uuid.uuid4().hex[:10]
-        job = JOBS[jid] = {"id": jid, "log": [], "results": {}, "done": False, "current": None, "total": len(plan), "freed": 0}
+        job = JOBS[jid] = {"id": jid, "log": [], "results": {}, "done": False, "current": None, "total": len(plan), "freed": 0,
+                           "items_done": 0, "w_done": 0, "w_total": 1, "cur": None, "cur_done": 0, "prompt": None,
+                           "aborting": False, "aborted": False, "t0": time.time(), "drive": str(b.get("drive") or ""),
+                           "plan_ids": [it["id"] for _, it, _ in plan]}
+        ctx = CTXS[jid] = JobCtx(job)
         log("=== Nova operação %s: %s | apagar=%d mover=%d lixeira=%s esvaziar_lixeira=%s ===" % (jid, action, len(dels), len(moves), recycle, empty_bin))
 
         def runner():
             try:
-                run_job(job, plan, empty_bin)
+                run_job(job, ctx, plan, empty_bin)
             finally:
                 LOCK.release()
         threading.Thread(target=runner, daemon=True).start()

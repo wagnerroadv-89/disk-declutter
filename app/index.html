@@ -92,7 +92,7 @@ select.destlist{width:100%;font:12px Consolas,monospace;background:var(--bg);col
 .spin{width:16px;height:16px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:sp 1s linear infinite;display:inline-block;vertical-align:-3px}
 @keyframes sp{to{transform:rotate(360deg)}}
 .empty{padding:28px;text-align:center;color:var(--muted)}
-footer{position:fixed;left:0;right:0;bottom:0;background:var(--panel);border-top:1px solid var(--line);padding:10px 24px calc(10px + env(safe-area-inset-bottom,0px));z-index:5;box-shadow:0 -4px 18px rgba(0,0,0,.08)}
+footer{position:fixed;left:0;right:0;bottom:0;background:var(--panel);border-top:1px solid var(--line);padding:10px 24px calc(10px + env(safe-area-inset-bottom,0px));z-index:5;box-shadow:0 -4px 18px rgba(0,0,0,.08);max-height:46vh;overflow:auto}
 .fin{max-width:1400px;margin:0 auto;display:flex;flex-direction:column;gap:8px}
 .sum{display:flex;flex-direction:column;gap:6px}
 .opts{display:flex;flex-direction:column;gap:6px}      /* caixas de marcar alinhadas uma abaixo da outra */
@@ -104,8 +104,19 @@ footer{position:fixed;left:0;right:0;bottom:0;background:var(--panel);border-top
 .bgrp .cap{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:4px;font-weight:600}
 button.prog{background:#7a3db8;color:#fff;border-color:#7a3db8;font-weight:600}
 button.dark{background:#7f1d1d;color:#fff;border-color:#7f1d1d;font-weight:600}
-#logp{margin:14px 0;padding:12px 16px}
-#logp pre{margin:6px 0 0;max-height:220px;overflow:auto;font:12px Consolas,monospace;white-space:pre-wrap}
+/* painel de andamento: fixo no TOPO, nunca coberto pelo rodapé */
+#jobbar{position:fixed;top:0;left:0;right:0;z-index:7;background:var(--panel);border-bottom:2px solid var(--accent);padding:10px 24px;box-shadow:0 4px 18px rgba(0,0,0,.2);max-height:72vh;overflow:auto}
+#jobbar>div{max-width:1400px;margin-left:auto;margin-right:auto}
+.jb-top{display:flex;justify-content:space-between;gap:12px;align-items:baseline;font-size:15px}
+.jb-top b#jbPct{font-size:18px;font-variant-numeric:tabular-nums}
+.pbar{height:16px;border-radius:99px;background:var(--grp);overflow:hidden;margin:6px 0}
+.pbar>i{display:block;height:100%;width:0;background:var(--accent);transition:width .4s}
+.pbar>i.ab{background:var(--warn)} .pbar>i.fin{background:var(--ok)}
+.jb-btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+#jobbar pre{margin:8px 0 0;max-height:26vh;overflow:auto;font:12px Consolas,monospace;white-space:pre-wrap;background:var(--bg);padding:8px;border-radius:8px}
+.optbtns{display:flex;flex-direction:column;gap:8px;margin:12px 0}
+.optbtns button{text-align:left;padding:9px 12px}
+.res.warn{color:var(--warn)} .res.mut{color:var(--muted)}
 dialog{border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--ink);padding:20px 22px;max-width:640px;width:calc(100% - 32px)}
 dialog::backdrop{background:rgba(0,0,0,.45)}
 dialog h2{font-size:18px}
@@ -153,7 +164,6 @@ dialog input[type=text]{width:100%;padding:9px;border:1px solid var(--line);bord
       </div>
     </div>
   </section>
-  <div class="card" id="logp" hidden><b id="logT">Andamento</b><pre id="log"></pre></div>
 </main>
 <footer><div class="fin">
   <div class="sum">
@@ -182,6 +192,19 @@ dialog input[type=text]{width:100%;padding:9px;border:1px solid var(--line);bord
   </div>
   <span class="na" id="scopeNote"></span>
 </div></footer>
+<div id="jobbar" hidden>
+  <div class="jb-top"><b id="jbTitle"></b><b id="jbPct">0% / 100%</b></div>
+  <div class="pbar"><i id="jbFill"></i></div>
+  <div class="na" id="jbInfo" style="font-size:13px"></div>
+  <div class="jb-btns">
+    <button class="danger" id="jbAbort">Abortar operação</button>
+    <button id="jbLogBtn">Ver log</button>
+    <button class="primary" id="jbRescan" hidden></button>
+    <button id="jbClose" hidden>Fechar</button>
+  </div>
+  <pre id="log" hidden></pre>
+</div>
+<dialog id="dlgp"><h2>Preciso da sua autorização</h2><div id="dpB"></div><div class="optbtns" id="dpO"></div><label id="dpAllL" style="display:flex;gap:6px;color:var(--muted)"><input type="checkbox" id="dpAll"> <span>Aplicar a todos os próximos casos iguais nesta operação</span></label></dialog>
 <dialog id="dlg"><h2 id="dT"></h2><div id="dB"></div><div id="dX"></div><div class="row"><button id="dNo">Cancelar</button><button id="dYes" class="danger">Confirmar</button></div></dialog>
 
 <script>
@@ -251,7 +274,7 @@ async function startScan(){
     restoredAge = null;
     ds.forEach(d=>{ for(const it of items.filter(i=>i.drive===d)){selDel.delete(it.id);selMove.delete(it.id);delete dest[it.id];delete results[it.id]} });
     if (!ds.includes(active)) active = ds[0];
-    $("#logp").hidden = true;
+    hideJobbar();
     await refresh();
   }catch(e){ await alert_(e.message); }
 }
@@ -344,8 +367,9 @@ function row(it){
     it.path ? h("div",{class:"path"}, isDone(it.id) ? it.path :
       h("a",{href:"#",class:"lnk",title:"Clique para abrir o Explorer e mostrar onde está",onclick:e=>{e.preventDefault();reveal(it)}}, "📂 "+it.path)) : null,
     h("div",{class:"note",text:it.note}),
-    r ? h("div",{class:"res "+(r.status==="ok"?"ok":r.status==="info"?"run":"err"),text:(r.status==="ok"?"✔ ":r.status==="info"?"ℹ ":"✖ ")+r.msg}) : null,
-    results["_run_"+it.id] ? h("div",{class:"res run",text:"⏳ em andamento…"}) : null);
+    r ? h("div",{class:"res "+({ok:"ok",info:"run",parcial:"warn",pulado:"mut",cancelado:"mut"}[r.status]||"err"),text:({ok:"✔ ",info:"ℹ ",parcial:"⚠ ",pulado:"⏭ ",cancelado:"⏹ "}[r.status]||"✖ ")+r.msg}) : null,
+    results["_run_"+it.id] ? h("div",{class:"res run",text:"⏳ em andamento… "+(results["_run_"+it.id].txt||"")}) :
+      (jobBusy && jobPlan.has(it.id) && !results[it.id]) ? h("div",{class:"res mut",text:"⏳ na fila"}) : null);
   let tr;
   if (it.movable){
     tr = h("td",{class:"tr"}, h("button",{class:"sm",disabled:busy()||isDone(it.id),onclick:()=>pickDest(it)}, it.kind==="arquivo"?"Transferir arquivo para outro local":"Transferir pasta para outro local"),
@@ -525,18 +549,83 @@ async function go(action, scope="files"){
   if (action==="delete_all") payload.confirmText = SCOPE_CONFIRM[scope];
   try{
     const r = await api("/api/run", payload);
-    jobBusy = true; $("#logp").hidden = false; $("#log").textContent = "";
+    jobBusy = true; jobId = r.job; shownPrompt = null; $("#log").textContent = "";
+    $("#jobbar").hidden = false; $("#jbRescan").hidden = true; $("#jbClose").hidden = true; $("#jbAbort").hidden = false; $("#jbAbort").disabled = false;
+    layoutPads();
     [...dels,...mv].forEach(x=>{ delete results[x.id] });
     renderAll(); pollJob(r.job);
   }catch(e){ await alert_("Não foi possível iniciar: "+e.message); }
 }
+// ---------- painel de andamento (topo da página) + política de permissões
+let jobId = null, shownPrompt = null;
+function fmtDur(s){ s = Math.round(s); if (s < 60) return s+" s"; const m = Math.floor(s/60); if (m < 60) return m+" min "+String(s%60).padStart(2,"0")+" s"; return Math.floor(m/60)+" h "+String(m%60).padStart(2,"0")+" min"; }
+const fmtN = n => n > 0 ? fmt(n) : "0 MB";
+const fmtRate = b => fmt(b).replace(".",",")+"/s";
+function layoutPads(){   // o rodapé e o painel de andamento nunca cobrem o conteúdo
+  const f = document.querySelector("footer"), jb = $("#jobbar");
+  document.body.style.paddingBottom = (f.offsetHeight + 24) + "px";
+  document.body.style.paddingTop = jb.hidden ? "" : (jb.offsetHeight + 8) + "px";
+}
+function hideJobbar(){ $("#jobbar").hidden = true; layoutPads(); }
+// Texto estilo "copiando arquivos" do Windows para o item em andamento: etapa · quanto já foi · quanto falta · MB/s · tempo restante
+function xferText(j){
+  const c = j.cur; if (!c) return "";
+  let s = c.phase;
+  if (c.copy_size){
+    const d = Math.min(j.cur_done||0, c.copy_size);
+    s += "  ·  "+fmtN(d)+" de "+fmt(c.copy_size)+"  ·  faltam "+fmtN(c.copy_size-d);
+    if (j.speed) s += "  ·  "+fmtRate(j.speed)+(j.eta!=null ? "  ·  ~"+fmtDur(j.eta)+" restantes" : "");
+  }
+  return s;
+}
+let jobPlan = new Set();
+function renderJob(j){
+  const jb = $("#jobbar"); jb.hidden = false;
+  const done = j.done, ab = !!j.aborted;
+  $("#jbTitle").textContent = (done ? (ab ? "⏹ Operação ABORTADA" : "✔ Operação concluída") : (j.aborting ? "⏳ Abortando…" : "⏳ Operação em andamento")) +
+    " — "+j.items_done+" de "+j.total+" item(ns) concluído(s)";
+  const pct = Math.max(0, Math.min(100, j.pct || 0));
+  $("#jbPct").textContent = (done ? Math.round(pct) : Math.floor(pct))+"% / 100%";   // só mostra 100% quando acabou de verdade
+  const fill = $("#jbFill"); fill.style.width = pct.toFixed(1)+"%"; fill.className = done ? (ab ? "ab" : "fin") : "";
+  // linha estilo "copiando arquivos" do Windows: o que está sendo feito, MB/s, quanto já foi e quanto falta
+  const c = j.cur; let info = "";
+  if (c){
+    info = c.verb+": "+c.name+" — "+xferText(j);
+    info += "\nTotal da operação: "+fmtN(j.bytes_done)+" de "+fmt(j.bytes_total)+" — faltam "+fmtN(j.bytes_total-j.bytes_done)+
+      (j.eta_total!=null ? "  ·  ~"+fmtDur(j.eta_total)+" para concluir tudo" : "")+"  ·  decorrido "+fmtDur(j.elapsed);
+    if (j.aborting) info += "\nAbortando: o item atual para na próxima verificação (um desinstalador aberto não é interrompido: feche a janela dele).";
+    if (j.prompt) info += "\n⏸ Aguardando a sua resposta no quadro de autorização.";
+  } else if (done){
+    const cnt = {}; Object.values(j.results).forEach(r=>{ cnt[r.status] = (cnt[r.status]||0)+1; });
+    const nome = {ok:"concluído(s)", info:"pedido(s) enviado(s)", parcial:"parcial(is)", pulado:"pulado(s)", cancelado:"cancelado(s)", erro:"com erro"};
+    info = "Liberado (estimado): "+fmtN(j.freed)+"  ·  tempo total "+fmtDur(j.elapsed)+"  ·  "+Object.entries(cnt).map(([k,v])=>v+" "+(nome[k]||k)).join(" · ")+
+      "\nPara ver só o que restou, escaneie o disco de novo.";
+  }
+  $("#jbInfo").style.whiteSpace = "pre-line"; $("#jbInfo").textContent = info;
+  $("#jbAbort").hidden = done; $("#jbAbort").disabled = !!j.aborting;
+  $("#jbRescan").hidden = !done; $("#jbClose").hidden = !done;
+  if (done && j.drive) $("#jbRescan").textContent = "Reescanear "+j.drive+" agora";
+  const logEl = $("#log"); logEl.textContent = j.log.join("\n"); if (!logEl.hidden) logEl.scrollTop = 1e9;
+  layoutPads();
+}
+async function handlePrompt(job, p){
+  const d = $("#dlgp"); $("#dpB").replaceChildren(h("p",{},h("b",{text:p.item})), h("p",{text:p.msg}));
+  $("#dpAll").checked = false; $("#dpAllL").hidden = !p.allow_all;
+  const choice = await new Promise(res=>{
+    $("#dpO").replaceChildren(...p.options.map(o=>h("button",{class:o.id==="skip"?"":"primary",onclick:()=>{ d.close(); res(o.id); }}, o.label)));
+    d.oncancel = e => e.preventDefault();          // sem Esc: a operação está pausada esperando uma resposta
+    d.showModal();
+  });
+  try{ await api("/api/decision", {job, pid:p.pid, choice, all:$("#dpAll").checked}); }catch(e){ await alert_(e.message); }
+}
 async function pollJob(job){
   try{
     const j = await api("/api/job?id="+job);
-    $("#log").textContent = j.log.join("\n"); $("#log").scrollTop = 1e9;
-    $("#logT").textContent = j.done ? "Concluído — liberado: "+fmt(j.freed) : "Andamento… ("+Object.keys(j.results).length+" de "+j.total+")";
+    renderJob(j);
+    if (j.prompt && j.prompt.pid !== shownPrompt){ shownPrompt = j.prompt.pid; handlePrompt(job, j.prompt); }
     for (const k of Object.keys(results)) if (k.startsWith("_run_")) delete results[k];
-    if (j.current) results["_run_"+j.current] = true;
+    jobPlan = new Set(j.plan_ids || []);
+    if (j.current) results["_run_"+j.current] = {verb: j.cur ? j.cur.verb : "", txt: xferText(j)};      // aparece na linha do item
     Object.assign(results, j.results);
     for (const [id,r] of Object.entries(j.results)) { if (r.status==="ok"){ selDel.delete(id); selMove.delete(id); delete dest[id]; } }
     drives.forEach(d=>{ const x=j.drives[d.letter]; if(x){d.free=x.free;d.total=x.total} });
@@ -567,6 +656,9 @@ async function refresh(){
   for (const set of [selDel, selMove]) for (const id of [...set]) if (!ids.has(id)) set.delete(id);
   for (const id of Object.keys(dest)) if (!ids.has(id)) delete dest[id];
   renderAll();
+  if (s.active_job && !jobBusy){                    // a página foi aberta/recarregada com uma operação em andamento: reassume o painel de andamento
+    jobBusy = true; jobId = s.active_job; $("#jobbar").hidden = false; layoutPads(); pollJob(jobId);
+  }
   if (scanning()) pollTimer = setTimeout(()=>refresh().catch(()=>{}), 1000);
 }
 $("#q").addEventListener("input",render); $("#fRisk").addEventListener("change",render); $("#fCat").addEventListener("change",render);
@@ -575,6 +667,19 @@ $("#allMove").addEventListener("change",e=>markMove(visible(),e.target.checked))
 $("#optEmpty").addEventListener("change",e=>{ if (e.target.checked) $("#optBin").checked = false; });
 $("#optBin").addEventListener("change",e=>{ if (e.target.checked && $("#optEmpty").checked) $("#optEmpty").checked = false; });
 $("#bScan").onclick = startScan;
+$("#jbAbort").onclick = async ()=>{
+  const ok = await ask({title:"Abortar a operação?", yes:"Sim, abortar", danger:true, body:[
+    h("p",{text:"A operação para onde estiver."}),
+    h("ul",{},[h("li",{text:"Mover: a cópia parcial no destino é removida e a ORIGEM continua intacta."}),
+               h("li",{text:"Apagar: o que já foi apagado não volta; o restante fica como está."}),
+               h("li",{text:"Desinstalar: um desinstalador já aberto não é interrompido (feche a janela dele); os próximos são cancelados."})]),
+    h("p",{class:"na",text:"Depois, escaneie o disco de novo para ver só o que restou."})]});
+  if (ok){ try{ await api("/api/abort", {job:jobId}); }catch(e){ await alert_(e.message); } }
+};
+$("#jbLogBtn").onclick = ()=>{ const l = $("#log"); l.hidden = !l.hidden; $("#jbLogBtn").textContent = l.hidden ? "Ver log" : "Ocultar log"; if (!l.hidden) l.scrollTop = 1e9; layoutPads(); };
+$("#jbClose").onclick = hideJobbar;
+$("#jbRescan").onclick = ()=>{ const d = active; hideJobbar(); chosen.clear(); chosen.add(d); startScan(); };
+new ResizeObserver(layoutPads).observe(document.querySelector("footer")); new ResizeObserver(layoutPads).observe($("#jobbar"));
 $("#bAll").onclick = ()=>go("delete_all","files"); $("#bDel").onclick = ()=>go("delete","files"); $("#bMove").onclick = ()=>go("move"); $("#bBoth").onclick = ()=>go("both");
 $("#bAllP").onclick = ()=>go("delete_all","programs"); $("#bDelP").onclick = ()=>go("delete","programs");
 $("#bAllX").onclick = ()=>go("delete_all","both"); $("#bDelX").onclick = ()=>go("delete","both");
