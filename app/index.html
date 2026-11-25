@@ -94,7 +94,8 @@ select.destlist{width:100%;font:12px Consolas,monospace;background:var(--bg);col
 .empty{padding:28px;text-align:center;color:var(--muted)}
 footer{position:fixed;left:0;right:0;bottom:0;background:var(--panel);border-top:1px solid var(--line);padding:10px 24px calc(10px + env(safe-area-inset-bottom,0px));z-index:5;box-shadow:0 -4px 18px rgba(0,0,0,.08)}
 .fin{max-width:1400px;margin:0 auto;display:flex;flex-direction:column;gap:8px}
-.sum{display:flex;gap:18px;flex-wrap:wrap;align-items:center}
+.sum{display:flex;flex-direction:column;gap:6px}
+.opts{display:flex;flex-direction:column;gap:6px}      /* caixas de marcar alinhadas uma abaixo da outra */
 .sum label{display:flex;gap:6px;align-items:flex-start;color:var(--muted)}
 .btns{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .bgroups{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start}
@@ -156,11 +157,12 @@ dialog input[type=text]{width:100%;padding:9px;border:1px solid var(--line);bord
 </main>
 <footer><div class="fin">
   <div class="sum">
-    <span id="sum">Escaneie um disco para começar.</span>
-    <span id="reuseStat" class="na"></span>
+    <div class="sumline"><span id="sum">Escaneie um disco para começar.</span> <span id="reuseStat" class="na"></span></div>
+    <div class="opts">
     <label><input type="checkbox" id="optBin" checked> <span>Enviar para a Lixeira (recomendado; o espaço só volta ao esvaziar). Caches são apagados direto.</span></label>
     <label><input type="checkbox" id="optEmpty"> <span>Apagar a Lixeira após concluir a exclusão (esvazia a Lixeira inteira do Windows)</span></label>
     <label><input type="checkbox" id="optJ" checked> <span>Deixar atalho (junction) no local antigo ao mover <span class="na">(se mantida, depois de mover uma pasta o Windows cria no caminho antigo um atalho invisível para a pasta nova; programas e arquivos que ainda procuram no local antigo continuam funcionando, mas sem ocupar espaço lá. Se desmarcar, o caminho antigo deixa de existir e quem usava essa pasta pode parar de achá-la. Vale só para pastas, não para arquivos soltos.)</span></span></label>
+    </div>
   </div>
   <div class="bgroups">
     <div class="bgrp"><div class="cap">Arquivos e pastas</div><div class="btns">
@@ -369,7 +371,9 @@ function summary(){
   const other = [...selDel,...selMove].map(byId).filter(x=>x && x.drive!==active).length;
   $("#sum").textContent = !active ? "Escaneie um disco para começar." : (!sel.length && !mm.length) ? "Nada selecionado em "+active :
     active+" — Apagar: "+selF.length+" arquivo(s) ("+fmt(sum(selF))+")  ·  Desinstalar: "+selP.length+" programa(s) ("+fmt(sum(selP))+")  ·  Mover: "+mv.length+" ("+fmt(sum(mv))+")" +
-    (miss ? "  ·  "+miss+" marcado(s) para mover sem destino" : "");
+    (miss ? "  ·  "+miss+" marcado(s) para mover sem destino" : "") +
+    // total que sai desta unidade: o que será apagado/desinstalado + o que será movido (com destino já escolhido)
+    "  ·  Total de espaço que será liberado da unidade "+active+" ("+((sum(sel)+sum(mv))/2**30).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})+" GB)";
   $("#scopeNote").textContent = active ? "Os botões valem só para a aba "+active+(other?" ("+other+" marcado(s) em outras abas não serão afetados)":"") : "";
   const rs = $("#reuseStat"); rs.replaceChildren();
   if (reuseOn) rs.append("📌 Mover para o mesmo local (automático): ", h("b",{text:reusePath})," ", h("button",{class:"sm",onclick:toggleReuse},"Desligar"));
