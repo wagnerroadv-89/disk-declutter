@@ -9,6 +9,11 @@ Como usar
   2. Marque os discos que quer escanear e clique em "Escanear agora". Cada disco ganha uma aba.
   3. Marque, em cada linha, "Apagar" ou "Mover" (para mover, clique em "Transferir pasta para outro local"
      e escolha a pasta de destino, em OUTRO disco).
+  3a. PROGRAMAS: a pasta de um programa instalado NUNCA e oferecida para apagar nem mover (mover exigiria reinstalar).
+     Programas so podem ser DESINSTALADOS, pela janela do desinstalador de cada um (jogos Steam, pelo Steam).
+     ATENCAO: desinstalar programas pode exigir ADMINISTRADOR. Programas instalados para todos os usuarios (a maioria,
+     em Program Files) costumam pedir isso: use iniciar-admin.bat (o Windows mostra o UAC, que so voce aprova).
+     Os botoes ficam em 3 grupos: Arquivos e pastas | Programas (so desinstalar) | Arquivos + programas.
   3b. O CAMINHO de cada item e um link: clique nele para abrir o Explorer ja mostrando o arquivo/pasta
      (nos caches, abre dentro da pasta). Serve para conferir antes de apagar.
   4. Use os botoes no rodape. Todo botao pede DUAS confirmacoes. Os botoes valem so para a aba aberta.

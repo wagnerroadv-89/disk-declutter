@@ -244,7 +244,12 @@ def do_delete(it, recycle, jlog):
         if it.get("steam"):
             return 0, "info", "Pedido enviado ao Steam: confirme a desinstalação na janela do Steam."
         if it.get("key") and installed(it["key"]):
-            raise RuntimeError("O programa continua instalado (código %s). Desinstalação cancelada ou incompleta." % rc)
+            if rc == 740 and not is_admin():
+                raise RuntimeError("Este desinstalador exige ADMINISTRADOR (código 740). Feche o painel, abra com "
+                                   "iniciar-admin.bat, escaneie de novo e tente outra vez.")
+            hint = (" Se você cancelou a janela do desinstalador, é isso mesmo." if rc in (0, 1, 2) else "") + \
+                   ("" if is_admin() or not it.get("uninstall_admin") else " Este programa costuma exigir administrador: tente pelo iniciar-admin.bat.")
+            raise RuntimeError("O programa continua instalado (código %s).%s" % (rc, hint))
         return it["size"], "ok", "Desinstalado"
     if kind == "sistema":
         r = subprocess.run(it["action"], shell=True, capture_output=True, text=True)
@@ -367,7 +372,7 @@ def run_job(job, plan, empty_bin=False):
                 job["results"][iid] = {"status": "erro", "msg": str(e), "freed": 0}
                 jlog("ERRO em %s -> %s: %s" % (it["name"], type(e).__name__, e))
         if empty_bin:
-            if any(k == "delete" for k, _, _ in plan):
+            if any(k == "delete" and it["kind"] != "programa" for k, it, _ in plan):     # so se apagou arquivos (nao so desinstalou)
                 jlog("Esvaziando a Lixeira do Windows ...")
                 code = empty_recycle_bin()
                 jlog("Lixeira esvaziada." if code == 0 else "Aviso: não consegui esvaziar a Lixeira (código 0x%X)." % code)
@@ -554,11 +559,22 @@ class H(http.server.BaseHTTPRequestHandler):
         if any(s.get("status") == "running" for s in SCANS.values()):
             return self._send(409, {"erro": "Há um scan em andamento. Aguarde terminar."})
         if action == "delete_all":
-            if b.get("confirmText") != "APAGAR TUDO":
-                return self._send(400, {"erro": "Confirmação 'APAGAR TUDO' ausente."})
+            # scope: "files" (arquivos/pastas/caches), "programs" (so desinstalar) ou "both"; cada um exige um texto proprio
+            scope = b.get("scope") or "files"
+            need = {"files": "APAGAR TUDO", "programs": "DESINSTALAR TUDO", "both": "APAGAR E DESINSTALAR TUDO"}.get(scope)
+            if need is None:
+                return self._send(400, {"erro": "escopo inválido"})
+            if b.get("confirmText") != need:
+                return self._send(400, {"erro": "Confirmação '%s' ausente." % need})
             drv = str(b.get("drive") or "").upper()
-            dels = [i["id"] for i in ITEMS.values() if i["drive"] == drv and i["risk"] != "alto"
+
+            def in_scope(i):
+                is_prog = i["kind"] == "programa"
+                return (scope == "both") or (scope == "programs" and is_prog) or (scope == "files" and not is_prog)
+            cand = [i for i in ITEMS.values() if i["drive"] == drv and i["risk"] != "alto" and in_scope(i)
                     and STATE.get(i["id"], {}).get("status") != "ok" and not (i.get("admin") and not is_admin())]
+            cand.sort(key=lambda i: i["kind"] == "programa")      # arquivos primeiro, desinstaladores (interativos) por ultimo
+            dels = [i["id"] for i in cand]
             moves = {}
         elif action not in ("delete", "move", "both"):
             return self._send(400, {"erro": "ação inválida"})
@@ -571,6 +587,7 @@ class H(http.server.BaseHTTPRequestHandler):
             return self._send(400, {"erro": "item desconhecido"})
         if set(dels) & set(moves):
             return self._send(400, {"erro": "Um item não pode ser apagado e movido ao mesmo tempo."})
+        dels.sort(key=lambda x: ITEMS[x]["kind"] == "programa")      # desinstaladores (interativos) sempre por ultimo
         for iid, d in moves.items():
             if not ITEMS[iid].get("movable"):
                 return self._send(400, {"erro": "'%s' não pode ser movido." % ITEMS[iid]["name"]})

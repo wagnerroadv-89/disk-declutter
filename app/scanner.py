@@ -210,8 +210,9 @@ def survey(drive, st):
     return dirs, files, steam
 
 
-def pick_stale_dirs(dirs, drive):
-    """Escolhe as pastas paradas e grandes (mais externas; divide se houver 2+ paradas dentro)."""
+def pick_stale_dirs(dirs, drive, roots=frozenset()):
+    """Escolhe as pastas paradas e grandes (mais externas; divide se houver 2+ paradas dentro).
+    `roots` = pastas de programas instalados: nunca viram candidato (nem inteiras nem por conterem uma)."""
     prot = protected_dirs(drive)
     kids = {}
     for p in dirs:
@@ -226,7 +227,10 @@ def pick_stale_dirs(dirs, drive):
         dep, s, n = dirs[p]
         if s < DIR_MIN:
             return []
-        if stale(p):
+        np_ = os.path.normcase(os.path.normpath(p))
+        if any(np_ == r or np_.startswith(r + "\\") for r in roots):
+            return []                                  # e uma pasta de programa (ou esta dentro de uma)
+        if stale(p) and not any(r.startswith(np_ + "\\") for r in roots):   # nem contem pasta de programa
             sk = [c for c in kids.get(p, []) if stale(c)]
             if len(sk) >= 2:
                 out = []
@@ -352,6 +356,7 @@ def installed_programs():
             if loc and not os.path.isdir(loc):
                 loc = ""
             out[(nm, kn)] = dict(name=nm, key=kn, version=v.get("DisplayVersion"), publisher=v.get("Publisher"), location=loc,
+                                 machine=(hive == winreg.HKEY_LOCAL_MACHINE),   # instalado para todos os usuarios: o desinstalador costuma exigir admin
                                  est=int(v.get("EstimatedSize") or 0) * 1024, install=str(v.get("InstallDate") or ""),
                                  uninstall=str(v.get("UninstallString") or ""), quiet=str(v.get("QuietUninstallString") or ""))
     return list(out.values())
@@ -363,10 +368,47 @@ def _tokens(name):
     return [t for t in re.split(r"[^a-z0-9]+", name.lower()) if len(t) >= 4 and t not in stop]
 
 
-def program_candidates(drive, system_drive, ua):
+def steam_install_dirs(steam_dirs):
+    """Pastas de jogos Steam instalados (steamapps\\common\\<installdir>), de todos os manifestos."""
+    out = []
+    for sa in sorted(set(steam_dirs)):
+        try:
+            names = os.listdir(sa)
+        except OSError:
+            continue
+        for fn in names:
+            if fn.startswith("appmanifest_") and fn.endswith(".acf"):
+                try:
+                    txt = open(os.path.join(sa, fn), encoding="utf-8", errors="ignore").read()
+                except OSError:
+                    continue
+                m = re.search(r'"installdir"\s+"([^"]*)"', txt)
+                if m and m.group(1):
+                    out.append(os.path.join(sa, "common", m.group(1)))
+    return out
+
+
+def program_roots(drive, progs, steam_dirs, protected):
+    """Pastas que pertencem a programas instalados (registro do Windows + jogos Steam) neste disco.
+    Programa so se tira com o desinstalador (nao se apaga nem se move a pasta), entao nenhuma pasta/arquivo
+    dentro de uma raiz, nem uma pasta que CONTENHA uma raiz, pode virar item de apagar/mover."""
+    roots = set()
+    for p in progs:
+        loc = p["location"]
+        if loc and len(loc) > 3 and loc[:2].upper() == drive.upper():
+            n = os.path.normcase(os.path.normpath(loc))
+            if n not in protected and len(n.split("\\")) > 2:     # ignora "C:\Program Files" e afins
+                roots.add(n)
+    for d in steam_install_dirs(steam_dirs):
+        if d[:2].upper() == drive.upper():
+            roots.add(os.path.normcase(os.path.normpath(d)))
+    return roots
+
+
+def program_candidates(drive, system_drive, ua, progs=None):
     items = []
     t = now()
-    progs = installed_programs()
+    progs = progs if progs is not None else installed_programs()
     seen_loc = {}
     for p in progs:
         loc = p["location"]
@@ -416,7 +458,8 @@ def program_candidates(drive, system_drive, ua):
             ll += " · instalado em %s/%s/%s" % (inst[6:8], inst[4:6], inst[:4])
         items.append(dict(cat=C_PROG, name=p["name"], path=loc, kind="programa", risk=risk, note=note, movable=False, admin=False,
                           size=0 if shared else size, last=iso(last) if last else None, lastLabel=ll, action="uninstall",
-                          uninstall=p["uninstall"], key=p["key"], publisher=p["publisher"], drive=drive.upper()))
+                          uninstall=p["uninstall"], key=p["key"], publisher=p["publisher"], drive=drive.upper(),
+                          uninstall_admin=bool(p.get("machine"))))
     return items
 
 
@@ -520,7 +563,9 @@ def scan_drive(drive, st):
     out = []
     if drive == sysd:
         out += known_junk(drive)
-    out += program_candidates(drive, sysd, ua)
+    progs = installed_programs()
+    roots = program_roots(drive, progs, steam, protected_dirs(drive))
+    out += program_candidates(drive, sysd, ua, progs)
     out += steam_candidates(drive, steam)
     st["found"] = len(out)
     st["phase"] = "Analisando o que está parado…"
@@ -528,7 +573,7 @@ def scan_drive(drive, st):
     kept = [os.path.normcase(os.path.normpath(i["path"])) for i in out if i["path"]]
     t = now()
     tail = []
-    for p in pick_stale_dirs(dirs, drive):
+    for p in pick_stale_dirs(dirs, drive, roots):
         dep, size, newest = dirs[p]
         np_ = os.path.normcase(os.path.normpath(p))
         if "\\steamapps\\" in np_ + "\\":      # arquivos internos de jogos Steam: o jogo e tratado como um todo
@@ -551,8 +596,8 @@ def scan_drive(drive, st):
         np_ = os.path.normcase(os.path.normpath(p))
         age = t - mt
         ext = os.path.splitext(p)[1].lower()
-        if any(np_.startswith(k + "\\") for k in kept):
-            continue
+        if any(np_.startswith(k + "\\") for k in kept) or any(np_.startswith(r + "\\") for r in roots):
+            continue          # arquivo dentro de algo ja listado ou dentro da pasta de um programa instalado
         if ext in INSTALLER_EXT and age >= 60 * DAY:
             cat, risk = C_INST, "baixo"
             note = "Instalador/arquivo compactado de %s, parado há %d meses. Se o programa já está instalado, pode apagar." % (human(size), months(mt))

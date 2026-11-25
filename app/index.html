@@ -23,7 +23,7 @@
   color-scheme: dark;
 }
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 "Segoe UI",system-ui,sans-serif;padding-bottom:150px}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 "Segoe UI",system-ui,sans-serif;padding-bottom:250px}
 header{padding:20px 24px 8px;max-width:1400px;margin:0 auto}
 h1{margin:0 0 4px;font-size:22px}
 h2{margin:0 0 8px;font-size:15px}
@@ -50,7 +50,7 @@ input[type=search]{min-width:260px}
 table{border-collapse:collapse;width:100%;min-width:980px}
 th,td{padding:9px 12px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}
 thead th{position:sticky;top:0;background:var(--panel);z-index:2;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);border-bottom:2px solid var(--line);white-space:nowrap}
-th.chk,td.chk{width:74px;text-align:center}
+th.chk,td.chk{width:96px;text-align:center}
 th.chk label{display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer}
 tr.grp td{background:var(--grp);font-weight:600}
 tr.grp .gm{color:var(--muted);font-weight:400;margin-left:8px}
@@ -93,7 +93,13 @@ footer{position:fixed;left:0;right:0;bottom:0;background:var(--panel);border-top
 .fin{max-width:1400px;margin:0 auto;display:flex;flex-direction:column;gap:8px}
 .sum{display:flex;gap:18px;flex-wrap:wrap;align-items:center}
 .sum label{display:flex;gap:6px;align-items:flex-start;color:var(--muted)}
-.btns{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.btns{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.bgroups{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start}
+.bgrp:first-child{flex-basis:100%}                                  /* 1º grupo (arquivos) ocupa a linha de cima */
+.bgrp:nth-child(3){border-left:2px solid var(--line);padding-left:14px}   /* barrinha vertical entre programas e arquivos+programas */
+.bgrp .cap{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:4px;font-weight:600}
+button.prog{background:#7a3db8;color:#fff;border-color:#7a3db8;font-weight:600}
+button.dark{background:#7f1d1d;color:#fff;border-color:#7f1d1d;font-weight:600}
 #logp{margin:14px 0;padding:12px 16px}
 #logp pre{margin:6px 0 0;max-height:220px;overflow:auto;font:12px Consolas,monospace;white-space:pre-wrap}
 dialog{border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--ink);padding:20px 22px;max-width:640px;width:calc(100% - 32px)}
@@ -110,7 +116,7 @@ dialog input[type=text]{width:100%;padding:9px;border:1px solid var(--line);bord
 <header>
   <h1>Limpeza de disco</h1>
   <p class="sub">Escolha os discos, escaneie e veja o que pode ser apagado, desinstalado ou movido. <b>O scan só lê</b>: nada é apagado nem movido até você marcar itens, clicar em um botão e confirmar duas vezes.</p>
-  <div class="card notice"><b>Como funciona:</b> coluna <b>Apagar</b> = você autoriza a exclusão (programas são desinstalados pelo desinstalador deles). Coluna <b>Mover</b> = a pasta/arquivo vai para o destino escolhido e, se a opção estiver marcada, fica um atalho (junction) no local antigo. Caches são recriados automaticamente. A coluna de data mostra o último uso registrado pelo Windows/Steam ou, quando não existe, a última modificação.</div>
+  <div class="card notice"><b>Como funciona:</b> coluna <b>Apagar / Desinstalar</b> = você autoriza a exclusão de arquivos e pastas ou a <b>desinstalação</b> de um programa. <b>A pasta de um programa instalado nunca é apagada nem movida</b> (mover exigiria reinstalar): programas só podem ser <b>desinstalados</b>, pela janela do desinstalador de cada um, e vários deles <b>exigem administrador</b> (abra o painel com <code>iniciar-admin.bat</code>). Coluna <b>Mover</b> = a pasta/arquivo vai para o destino escolhido e, se a opção estiver marcada, fica um atalho (junction) no local antigo. Caches são recriados automaticamente. A coluna de data mostra o último uso registrado pelo Windows/Steam ou, quando não existe, a última modificação.</div>
 </header>
 <main>
   <section>
@@ -134,7 +140,7 @@ dialog input[type=text]{width:100%;padding:9px;border:1px solid var(--line);bord
       <div class="tablewrap">
         <table id="tbl">
           <thead><tr>
-            <th class="chk"><label>Apagar<input type="checkbox" id="allDel" title="Marcar/desmarcar todos os visíveis"></label></th>
+            <th class="chk"><label>Apagar / Desinstalar<input type="checkbox" id="allDel" title="Marcar/desmarcar todos os visíveis"></label></th>
             <th class="chk"><label>Mover<input type="checkbox" id="allMove" title="Marcar/desmarcar todos os visíveis que podem ser movidos"></label></th>
             <th>Nome</th><th>Último uso</th><th class="size">Tamanho</th><th class="tr">Transferir</th>
           </tr></thead>
@@ -152,13 +158,23 @@ dialog input[type=text]{width:100%;padding:9px;border:1px solid var(--line);bord
     <label><input type="checkbox" id="optEmpty"> <span>Apagar a Lixeira após concluir a exclusão (esvazia a Lixeira inteira do Windows)</span></label>
     <label><input type="checkbox" id="optJ" checked> <span>Deixar atalho (junction) no local antigo ao mover <span class="na">(se mantida, depois de mover uma pasta o Windows cria no caminho antigo um atalho invisível para a pasta nova; programas e arquivos que ainda procuram no local antigo continuam funcionando, mas sem ocupar espaço lá. Se desmarcar, o caminho antigo deixa de existir e quem usava essa pasta pode parar de achá-la. Vale só para pastas, não para arquivos soltos.)</span></span></label>
   </div>
-  <div class="btns">
-    <button class="danger" id="bAll">Apagar tudo</button>
-    <button class="danger" id="bDel">Apagar selecionados</button>
-    <button class="primary" id="bMove">Mover arquivos especificados</button>
-    <button class="danger" id="bBoth">Apagar selecionados e mover</button>
-    <span class="na" id="scopeNote"></span>
+  <div class="bgroups">
+    <div class="bgrp"><div class="cap">Arquivos e pastas</div><div class="btns">
+      <button class="danger" id="bAll">Apagar todos os arquivos</button>
+      <button class="danger" id="bDel">Apagar arquivos selecionados</button>
+      <button class="primary" id="bMove">Mover arquivos especificados</button>
+      <button class="danger" id="bBoth">Apagar selecionados e mover</button>
+    </div></div>
+    <div class="bgrp"><div class="cap">Programas (só desinstalar)</div><div class="btns">
+      <button class="prog" id="bAllP">Desinstalar todos os programas</button>
+      <button class="prog" id="bDelP">Desinstalar programas selecionados</button>
+    </div></div>
+    <div class="bgrp"><div class="cap">Arquivos + programas</div><div class="btns">
+      <button class="dark" id="bAllX">Apagar todos os arquivos e desinstalar programas</button>
+      <button class="dark" id="bDelX">Apagar arquivos e programas selecionados</button>
+    </div></div>
   </div>
+  <span class="na" id="scopeNote"></span>
 </div></footer>
 <dialog id="dlg"><h2 id="dT"></h2><div id="dB"></div><div id="dX"></div><div class="row"><button id="dNo">Cancelar</button><button id="dYes" class="danger">Confirmar</button></div></dialog>
 
@@ -259,6 +275,9 @@ function renderProg(){
     const secs = Math.round(s.finished - s.started);
     if (restoredAge !== null)
       p.append(h("div",{class:"warn",text:"Painel reaberto dentro do prazo: mantive o scan feito há "+ageTxt(restoredAge)+". Se algo mudou nos discos desde então (arquivos novos ou já apagados), escaneie de novo."}));
+    const needAdm = mine().filter(x=>x.uninstall_admin && !isDone(x.id)).length;
+    if (needAdm && !admin)
+      p.append(h("div",{class:"warn",text:needAdm+" programa(s) desta aba foram instalados para todos os usuários e o desinstalador deles costuma exigir ADMINISTRADOR. O painel está em modo normal: para desinstalá-los sem erro, feche o painel e abra com iniciar-admin.bat (ou rode a skill e escolha “Como administrador”). Você ainda pode tentar; se o desinstalador pedir permissão ou falhar, o painel avisa."}));
     p.append(h("div",{class:"na",style:"margin:10px 0 0",text:"Escaneado há "+ageTxt(Date.now()/1000 - s.finished)+" (levou "+secs+" s, "+s.files.toLocaleString("pt-BR")+" arquivos analisados). Este resultado só existe na memória: se você fechar o painel, ele é guardado por "+ageTxt(ttl)+" (para o caso de fechar sem querer) e depois disso é descartado — o painel volta ao início e pede um novo scan."}));
   }
   $("#results").hidden = s.status !== "done";
@@ -315,6 +334,7 @@ function row(it){
   const nameTd = h("td",{},
     h("span",{class:"nm",text:it.name}), h("span",{class:"badge b-"+it.risk,text:RISK[it.risk]}),
     it.admin ? h("span",{class:"badge b-admin",text:"requer administrador"}) : null,
+    (it.uninstall_admin && !admin && !isDone(it.id)) ? h("span",{class:"badge b-admin",title:"Instalado para todos os usuários: o desinstalador costuma pedir administrador. Abra o painel com iniciar-admin.bat para evitar erro.",text:"desinstalar pode exigir administrador"}) : null,
     it.path ? h("div",{class:"path"}, isDone(it.id) ? it.path :
       h("a",{href:"#",class:"lnk",title:"Clique para abrir o Explorer e mostrar onde está",onclick:e=>{e.preventDefault();reveal(it)}}, "📂 "+it.path)) : null,
     h("div",{class:"note",text:it.note}),
@@ -335,18 +355,26 @@ function setMove(it,on){ if(on&&canMove(it)){selMove.add(it.id);selDel.delete(it
 const mySel = set => [...set].map(byId).filter(x=>x && x.drive===active);
 const movesReady = () => mySel(selMove).filter(x=>dest[x.id]);
 
+const isProg = x => x.kind === "programa";
 function summary(){
-  const dels = mySel(selDel), mv = movesReady(), mm = mySel(selMove);
-  const sd = dels.reduce((a,b)=>a+b.size,0), sm = mv.reduce((a,b)=>a+b.size,0), miss = mm.length - mv.length;
+  const sel = mySel(selDel), selF = sel.filter(x=>!isProg(x)), selP = sel.filter(isProg);
+  const mv = movesReady(), mm = mySel(selMove);
+  const sum = a => a.reduce((s,x)=>s+x.size,0), miss = mm.length - mv.length;
   const other = [...selDel,...selMove].map(byId).filter(x=>x && x.drive!==active).length;
-  $("#sum").textContent = !active ? "Escaneie um disco para começar." : (!dels.length && !mm.length) ? "Nada selecionado em "+active :
-    active+" — Apagar: "+dels.length+" ("+fmt(sd)+")  ·  Mover: "+mv.length+" ("+fmt(sm)+")" + (miss ? "  ·  "+miss+" marcado(s) para mover sem destino" : "");
+  $("#sum").textContent = !active ? "Escaneie um disco para começar." : (!sel.length && !mm.length) ? "Nada selecionado em "+active :
+    active+" — Apagar: "+selF.length+" arquivo(s) ("+fmt(sum(selF))+")  ·  Desinstalar: "+selP.length+" programa(s) ("+fmt(sum(selP))+")  ·  Mover: "+mv.length+" ("+fmt(sum(mv))+")" +
+    (miss ? "  ·  "+miss+" marcado(s) para mover sem destino" : "");
   $("#scopeNote").textContent = active ? "Os botões valem só para a aba "+active+(other?" ("+other+" marcado(s) em outras abas não serão afetados)":"") : "";
   const ready = active && scans[active] && scans[active].status==="done" && !busy();
-  $("#bDel").disabled = !ready || !dels.length;
-  $("#bMove").disabled = !ready || !mm.length;
-  $("#bBoth").disabled = !ready || (!dels.length && !mm.length);
-  $("#bAll").disabled = !ready || !mine().some(x=>x.risk!=="alto"&&canDel(x));
+  const allF = mine().filter(x=>!isProg(x)&&x.risk!=="alto"&&canDel(x)), allP = mine().filter(x=>isProg(x)&&x.risk!=="alto"&&canDel(x));
+  $("#bAll").disabled   = !ready || !allF.length;                       // arquivos
+  $("#bDel").disabled   = !ready || !selF.length;
+  $("#bMove").disabled  = !ready || !mm.length;
+  $("#bBoth").disabled  = !ready || (!selF.length && !mm.length);
+  $("#bAllP").disabled  = !ready || !allP.length;                       // programas
+  $("#bDelP").disabled  = !ready || !selP.length;
+  $("#bAllX").disabled  = !ready || !(allF.length && allP.length);      // arquivos + programas
+  $("#bDelX").disabled  = !ready || !(selF.length && selP.length);
 }
 function renderAll(){ renderDrives(); renderTabs(); renderProg(); if (active && scans[active] && scans[active].status==="done") renderTable(); summary(); }
 function render(){ renderTabs(); if (active && scans[active] && scans[active].status==="done") renderTable(); summary(); renderDrivesBars(); }
@@ -385,44 +413,57 @@ function ask({title, body, yes, danger=true, needText}){
 function alert_(msg){ return ask({title:"Atenção", body:[h("p",{text:msg})], yes:"OK", danger:false}).then(()=>{}) }
 function listBox(arr){ const shown = arr.slice(0,12); return h("ul",{}, shown.map(it=>h("li",{},it.name," — ",fmt(it.size))), arr.length>12?h("li",{text:"… e mais "+(arr.length-12)}):null) }
 
-async function go(action){
-  let dels = mySel(selDel), mv = movesReady();
+// scope: "files" (arquivos/pastas/caches), "programs" (só desinstalar) ou "both". Programa nunca é apagado/movido como pasta.
+const SCOPE_CONFIRM = {files:"APAGAR TUDO", programs:"DESINSTALAR TUDO", both:"APAGAR E DESINSTALAR TUDO"};
+const SCOPE_TITLE = {files:"Apagar TODOS os arquivos", programs:"Desinstalar TODOS os programas", both:"Apagar todos os arquivos E desinstalar todos os programas"};
+async function go(action, scope="files"){
+  const useF = scope !== "programs", useP = scope !== "files";
+  const inScope = list => list.filter(x => isProg(x) ? useP : useF);
+  let dels = [], mv = [];
+  if (action==="delete_all") dels = inScope(mine().filter(x=>x.risk!=="alto"&&canDel(x)));
+  else if (action==="delete") dels = inScope(mySel(selDel));
+  else if (action==="both") { dels = mySel(selDel).filter(x=>!isProg(x)); mv = movesReady(); }
+  else if (action==="move") mv = movesReady();
+  dels.sort((a,b)=>isProg(a)-isProg(b));              // arquivos primeiro; desinstaladores (interativos) por último
   const miss = mySel(selMove).filter(x=>!dest[x.id]);
-  if (action==="delete_all") { dels = mine().filter(x=>x.risk!=="alto"&&canDel(x)); mv = []; }
-  if (action==="delete") mv = [];
-  if (action==="move") dels = [];
-  if (miss.length && action!=="delete" && action!=="delete_all"){
+  if (miss.length && (action==="move" || action==="both")){
     await alert_("Estes itens estão marcados para mover mas ainda não têm pasta destino. Clique em “Transferir…” em cada um: "+miss.slice(0,6).map(x=>x.name).join("; ")+(miss.length>6?"…":""));
     return;
   }
   if (!dels.length && !mv.length){ await alert_("Nada a fazer: marque itens (e escolha destino para mover)."); return; }
-  const emptyBin = $("#optEmpty").checked;
+  const filesL = dels.filter(x=>!isProg(x)), progsL = dels.filter(isProg);
+  const emptyBin = $("#optEmpty").checked && filesL.length > 0;     // esvaziar a Lixeira só faz sentido se houver arquivos apagados
   const recycle = $("#optBin").checked && !emptyBin, junction = $("#optJ").checked;
   const body = [];
-  if (dels.length){
-    const progs = dels.filter(x=>x.kind==="programa").length;
-    body.push(h("p",{},h("b",{text:(action==="delete_all"?"APAGAR TUDO em "+active+": ":"")+dels.length+" item(ns) serão removidos"})," (",fmt(dels.reduce((a,b)=>a+b.size,0)),")."), listBox(dels));
-    if (progs) body.push(h("div",{class:"warn",text:progs+" programa(s) serão desinstalados: a janela de cada desinstalador vai abrir e você confirma nela."}));
+  if (filesL.length){
+    body.push(h("p",{},h("b",{text:filesL.length+" arquivo(s)/pasta(s) serão apagados"})," (",fmt(filesL.reduce((a,b)=>a+b.size,0)),"):"), listBox(filesL));
     body.push(h("p",{class:"na",text: recycle ? "Arquivos e pastas comuns vão para a Lixeira (caches são apagados direto)." : "Exclusão DEFINITIVA, sem Lixeira."}));
     if (emptyBin) body.push(h("div",{class:"warn",text:"Ao concluir, a Lixeira INTEIRA do Windows será esvaziada (inclusive o que já estava nela antes). Não dá para recuperar."}));
-    if (action==="delete_all") body.push(h("div",{class:"warn",text:"Inclui itens de “Confirme antes”. Itens de risco “Cuidado” ficam de fora."}));
   }
+  if (progsL.length){
+    body.push(h("p",{},h("b",{text:progsL.length+" programa(s) serão DESINSTALADOS"})," (",fmt(progsL.reduce((a,b)=>a+b.size,0)),"):"), listBox(progsL));
+    body.push(h("div",{class:"warn",text:"Um programa por vez" + (filesL.length ? ", depois dos arquivos" : "") + ": a janela do desinstalador de cada um vai abrir e você confirma nela. A pasta do programa não é apagada à parte: quem remove é o desinstalador."}));
+    const adm = progsL.filter(x=>x.uninstall_admin).length;
+    if (adm && !admin) body.push(h("div",{class:"warn",text:"Destes, "+adm+" costuma(m) exigir ADMINISTRADOR e o painel está em modo normal: o Windows pode pedir permissão (UAC) ou o desinstalador pode falhar. Para evitar, cancele, feche o painel e abra com iniciar-admin.bat."}));
+  }
+  if (action==="delete_all") body.push(h("div",{class:"warn",text:"Inclui itens de “Confirme antes”. Itens de risco “Cuidado” ficam de fora."}));
   if (mv.length){
     body.push(h("p",{},h("b",{text:mv.length+" item(ns) serão movidos"})," (",fmt(mv.reduce((a,b)=>a+b.size,0)),"):"),
       h("ul",{},mv.map(x=>h("li",{},x.name," → ",h("span",{class:"path",text:dest[x.id]})))),
       h("p",{class:"na",text:"A cópia é verificada antes de apagar a origem."+(junction?" Um atalho (junction) ficará no local antigo.":"")}));
   }
-  const ok = await ask({title: action==="delete_all"?"Apagar TUDO da aba "+active+"?":"Confirmar operação", body, yes: action==="move"?"Continuar":"Continuar", danger: action!=="move", needText: action==="delete_all"?"APAGAR TUDO":null});
+  const ok = await ask({title: action==="delete_all" ? SCOPE_TITLE[scope]+" da aba "+active+"?" : "Confirmar operação", body, yes:"Continuar", danger: action!=="move", needText: action==="delete_all" ? SCOPE_CONFIRM[scope] : null});
   if (!ok) return;
   const resumo = [];
-  if (dels.length) resumo.push((action==="delete_all"?"APAGAR TUDO — ":"")+dels.length+" item(ns) para "+(dels.some(x=>x.kind==="programa")?"apagar/desinstalar":"apagar")+" ("+fmt(dels.reduce((a,b)=>a+b.size,0))+")");
+  if (filesL.length) resumo.push((action==="delete_all"?"APAGAR TUDO — ":"")+filesL.length+" arquivo(s)/pasta(s) para apagar ("+fmt(filesL.reduce((a,b)=>a+b.size,0))+")");
+  if (progsL.length) resumo.push(progsL.length+" programa(s) para desinstalar ("+fmt(progsL.reduce((a,b)=>a+b.size,0))+"), um por vez, pelo desinstalador de cada um");
   if (mv.length) resumo.push(mv.length+" item(ns) para mover ("+fmt(mv.reduce((a,b)=>a+b.size,0))+")");
   if (emptyBin) resumo.push("esvaziar a Lixeira do Windows ao final");
   const ok2 = await ask({title:"Última confirmação", body:[h("p",{},h("b",{text:"Tem certeza?"})," Será executado agora:"), h("ul",{},resumo.map(t=>h("li",{text:t}))), h("p",{class:"na",text:"Depois que começar, o app não desfaz o que foi apagado definitivamente."})],
     yes: action==="move" ? "Sim, tenho certeza — mover" : "Sim, tenho certeza — executar", danger: action!=="move"});
   if (!ok2) return;
-  const payload = {action, drive:active, recycle, junction, emptyBin, confirm:true, confirm2:true, delete: dels.map(x=>x.id), moves: Object.fromEntries(mv.map(x=>[x.id,dest[x.id]]))};
-  if (action==="delete_all") payload.confirmText = "APAGAR TUDO";
+  const payload = {action, scope, drive:active, recycle, junction, emptyBin, confirm:true, confirm2:true, delete: dels.map(x=>x.id), moves: Object.fromEntries(mv.map(x=>[x.id,dest[x.id]]))};
+  if (action==="delete_all") payload.confirmText = SCOPE_CONFIRM[scope];
   try{
     const r = await api("/api/run", payload);
     jobBusy = true; $("#logp").hidden = false; $("#log").textContent = "";
@@ -475,7 +516,9 @@ $("#allMove").addEventListener("change",e=>{visible().forEach(x=>{if(canMove(x))
 $("#optEmpty").addEventListener("change",e=>{ if (e.target.checked) $("#optBin").checked = false; });
 $("#optBin").addEventListener("change",e=>{ if (e.target.checked && $("#optEmpty").checked) $("#optEmpty").checked = false; });
 $("#bScan").onclick = startScan;
-$("#bAll").onclick = ()=>go("delete_all"); $("#bDel").onclick = ()=>go("delete"); $("#bMove").onclick = ()=>go("move"); $("#bBoth").onclick = ()=>go("both");
+$("#bAll").onclick = ()=>go("delete_all","files"); $("#bDel").onclick = ()=>go("delete","files"); $("#bMove").onclick = ()=>go("move"); $("#bBoth").onclick = ()=>go("both");
+$("#bAllP").onclick = ()=>go("delete_all","programs"); $("#bDelP").onclick = ()=>go("delete","programs");
+$("#bAllX").onclick = ()=>go("delete_all","both"); $("#bDelX").onclick = ()=>go("delete","both");
 refresh().catch(e=>{ document.body.prepend(h("p",{class:"warn",text:"Falha ao carregar: "+e.message})) });
 </script>
 </body>

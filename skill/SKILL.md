@@ -13,6 +13,7 @@ Esta skill abre um app local (Python, só `127.0.0.1`) já pronto. O arquivo `te
 - O scan é somente leitura. Pode ser disparado pelo usuário no painel; só dispare você mesmo se ele pedir.
 - Não envie o conteúdo da lista (nomes de pastas e programas do usuário) para serviços externos.
 - **Pergunte o modo de início TODA vez que a skill rodar** (passo 4), mesmo que já tenha perguntado antes. Nunca escolha o modo por conta própria.
+- **Na primeira execução, avise que desinstalar programas pode exigir administrador** (passo 4). Isso vale ao rodar a skill dentro do console do Claude Code ou de outra IA; o mesmo aviso está no `README.md`/`AGENTS.md` do repositório e dentro do painel.
 - Você **não pode aprovar** a janela de permissão do Windows (UAC) que aparece no modo administrador: é o usuário quem clica em "Sim".
 
 ## Passo a passo
@@ -26,10 +27,13 @@ Esta skill abre um app local (Python, só `127.0.0.1`) já pronto. O arquivo `te
    ```
    O `limpeza.log` do usuário fica na pasta e não está no zip, então não é sobrescrito.
 3. **Checar Python com tkinter**: `python -I -c "import tkinter, winreg; print('ok')"`. Se falhar, diga ao usuário que precisa instalar o Python oficial (python.org) com a opção "tcl/tk" e pare.
-4. **Perguntar como iniciar** (use a ferramenta de perguntas, `AskUserQuestion`, ou pergunte no chat se ela não existir):
-   - **Normal** *(padrão sugerido)*: roda sem privilégios. Itens que exigem administrador (`Windows\Temp`, cache do Windows Update, hibernação) aparecem desabilitados.
-   - **Como administrador**: libera esses itens; o Windows mostra uma janela de permissão (UAC) que o usuário precisa aprovar.
-   Guarde a resposta em `MODO` (`normal` ou `admin`).
+4. **Aviso da primeira execução + perguntar como iniciar.**
+   - **Aviso (só na PRIMEIRA vez que a skill roda neste computador)**: se o arquivo `APP\.aviso-desinstalar-visto` **não existir**, diga ao usuário, em texto claro e **antes** de perguntar o modo, o aviso abaixo; depois crie esse arquivo (vazio) para não repetir:
+     > ⚠️ **Desinstalar programas pode exigir administrador.** Os programas e jogos aparecem no painel **só para desinstalar** (a pasta deles nunca é apagada nem movida). Os instalados para todos os usuários (a maioria, em `Program Files`) costumam pedir **administrador**; o painel marca esses com “desinstalar pode exigir administrador”. Para evitar erro, inicie **como administrador** — o Windows mostra uma janela de permissão (UAC) que só você pode aprovar. No modo normal ainda dá para tentar, mas os desinstaladores que exigirem elevação vão falhar (“exige ADMINISTRADOR, código 740”). Arquivos e pastas não precisam de administrador (exceto `Windows\Temp`, cache do Windows Update e hibernação).
+   - **Pergunta (a cada execução)** — use a ferramenta de perguntas, `AskUserQuestion`, ou pergunte no chat se ela não existir:
+     - **Normal** *(padrão sugerido)*: roda sem privilégios. Itens que exigem administrador (`Windows\Temp`, cache do Windows Update, hibernação) aparecem desabilitados, e desinstalar programas "de todos os usuários" pode falhar.
+     - **Como administrador** *(recomendado se for desinstalar programas)*: libera esses itens e os desinstaladores; o Windows mostra uma janela de permissão (UAC) que o usuário precisa aprovar.
+     Guarde a resposta em `MODO` (`normal` ou `admin`). Se escolher **normal** e a lista tiver programas, lembre em uma frase que programas costumam pedir administrador.
 5. **Ver se já há um painel rodando**: se `APP\server.url` existir, leia a URL e faça `GET <url>api/info` (sem token; devolve `{"app","admin","version"}`).
    - Respondeu e `admin` **coincide** com `MODO` (e a versão é a mesma de `APP\VERSION`): **reaproveite** (mantém o scan guardado, se ainda estiver dentro dos 10 min) e pule para o passo 7.
    - Respondeu mas o modo **não coincide** (ou a versão é antiga): é preciso reiniciar. Pare o processo que escuta na porta da URL (`Get-NetTCPConnection -LocalPort <porta> -State Listen` → `Stop-Process -Id <pid> -Force`). Se der "acesso negado" (servidor que está elevado), peça ao usuário para **fechar a janela do servidor** (a janela preta "Limpeza de disco") e aguarde a confirmação; depois siga.
@@ -44,7 +48,7 @@ Esta skill abre um app local (Python, só `127.0.0.1`) já pronto. O arquivo `te
    No modo admin, avise **antes** que vai aparecer a janela de permissão do Windows. Espere o `APP\server.url` aparecer (até ~60 s; no admin depende do usuário aprovar). Ele contém o endereço (porta padrão 8765; se estiver ocupada o app usa a próxima livre).
    - Confirme com `GET <url>api/info` que `admin` bate com `MODO`. Se escolheu admin e o servidor subiu sem admin (ou nada subiu), o usuário provavelmente recusou o UAC: diga isso e ofereça tentar de novo ou seguir no modo normal.
 7. **Abrir o painel para o usuário**: no app desktop do Claude, abra a URL no navegador embutido (`preview_start` com `url`). Se não houver navegador embutido, use `start <url>` no PowerShell.
-8. **Explique em 3 linhas** o que fazer: marcar os discos, clicar em **Escanear agora** (mais de um disco = uma aba por disco), marcar *Apagar* / *Mover* (e usar "Transferir pasta para outro local" para escolher o destino) e usar os botões do rodapé; cada botão pede duas confirmações e vale só para a aba aberta. Avise também que **o caminho de cada item é um link: clicar nele abre o Explorer do Windows já mostrando o arquivo/pasta** (para conferir antes de apagar, sem copiar e colar). Diga em que modo o painel está rodando (normal/administrador).
+8. **Explique em 3 linhas** o que fazer: marcar os discos, clicar em **Escanear agora** (mais de um disco = uma aba por disco), marcar *Apagar / Desinstalar* e *Mover* (e usar "Transferir pasta para outro local" para escolher o destino) e usar os botões do rodapé, que estão em **três grupos**: *Arquivos e pastas* (apagar todos/selecionados, mover, apagar e mover), *Programas — só desinstalar* (desinstalar todos/selecionados) e *Arquivos + programas* (os dois juntos). **Programas nunca têm a pasta apagada ou movida: só são desinstalados.** Cada botão pede duas confirmações e vale só para a aba aberta. Avise também que **o caminho de cada item é um link: clicar nele abre o Explorer do Windows já mostrando o arquivo/pasta** (para conferir antes de apagar, sem copiar e colar). Diga em que modo o painel está rodando (normal/administrador).
 
 ## Validade do scan (importante ao reabrir)
 

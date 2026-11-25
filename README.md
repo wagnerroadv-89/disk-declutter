@@ -30,15 +30,31 @@ Disco cheio e você não sabe o que apagar? O **disk-declutter** varre as unidad
    | Cache e temporários | Temp, npm/pip/Gradle, shaders, crash dumps, caches de navegadores, Windows Update, hibernação… (apenas no disco do sistema) |
 
 3. Mostra cada item numa **tabela** com *nome · último uso · tamanho*, um **selo de risco** (*Baixo risco*, *Confirme antes*, *Cuidado*) e uma explicação.
-4. Duas colunas de seleção: **Apagar** (programas são desinstalados pelo próprio desinstalador; jogos Steam pelo Steam) e **Mover**.
+4. Duas colunas de seleção: **Apagar / Desinstalar** e **Mover**. **A pasta de um programa instalado nunca é oferecida para apagar nem para mover** (mover exigiria desinstalar e reinstalar): programas e jogos aparecem **só para desinstalar** — pelo desinstalador do próprio programa (jogos Steam, pelo Steam). Pastas e arquivos que pertencem a um programa instalado (ou que *contêm* um) são ignorados no scan.
 5. **O caminho de cada item é um link clicável** (📂): um clique abre o Explorer do Windows já com o arquivo/pasta selecionado (em caches, abre dentro da pasta), para você conferir antes de decidir — sem copiar e colar caminhos.
 6. Para mover, o botão **“Transferir pasta para outro local”** abre o seletor de pastas do Explorer; o caminho escolhido aparece ao lado do botão.
-7. Quatro botões no rodapé (valem **só para a aba aberta**): **Apagar tudo** · **Apagar selecionados** · **Mover arquivos especificados** · **Apagar selecionados e mover**.
+7. Oito botões no rodapé, em **três grupos** separados por uma barra vertical (valem **só para a aba aberta**):
+
+   | Grupo | Botões |
+   |---|---|
+   | **Arquivos e pastas** | Apagar todos os arquivos · Apagar arquivos selecionados · Mover arquivos especificados · Apagar selecionados e mover |
+   | **Programas (só desinstalar)** | Desinstalar todos os programas · Desinstalar programas selecionados |
+   | **Arquivos + programas** | Apagar todos os arquivos e desinstalar programas · Apagar arquivos e programas selecionados |
+
+   Os botões “todos” pedem para digitar `APAGAR TUDO`, `DESINSTALAR TUDO` ou `APAGAR E DESINSTALAR TUDO`, conforme o grupo. Quando há arquivos e programas na mesma ação, os arquivos são apagados primeiro e os programas desinstalados por último, um por vez.
+
+### ⚠️ Desinstalar programas pode exigir administrador
+
+- Os desinstaladores abrem a **janela do próprio programa** e você confirma nela. O painel confere no registro do Windows se o programa realmente saiu.
+- Programas instalados **para todos os usuários** (a maioria, em `Program Files`) costumam exigir **administrador**; o painel os marca com *“desinstalar pode exigir administrador”* e mostra um aviso na aba.
+- Para evitar erro, **inicie o painel como administrador**: `app\iniciar-admin.bat` (o Windows mostra a janela de permissão, o UAC, que só você pode aprovar) — ou, pela skill, escolha **“Como administrador”**.
+- No modo normal você ainda pode tentar: o Windows pode pedir permissão na hora; se o desinstalador exigir elevação e não conseguir, o painel mostra *“Este desinstalador exige ADMINISTRADOR (código 740)”* e **não marca o programa como removido**.
+- Programas instalados só para o seu usuário (e jogos Steam) não precisam de administrador.
 
 ### Segurança (o que ele garante e o que não garante)
 
-- **Scan somente leitura.** Apagar/mover só ocorre depois de clique **+ dupla confirmação**; “Apagar tudo” ainda exige digitar `APAGAR TUDO`.
-- **“Apagar tudo” pula itens de risco “Cuidado”** (documentos pessoais, Java, certificados digitais, ferramentas de desenvolvimento).
+- **Scan somente leitura.** Apagar/mover/desinstalar só ocorre depois de clique **+ dupla confirmação**; os botões “todos” ainda exigem digitar um texto (acima).
+- **Os botões “todos” pulam itens de risco “Cuidado”** (documentos pessoais, Java, certificados digitais, ferramentas de desenvolvimento).
 - **Lixeira por padrão** para arquivos e pastas comuns (caches são apagados direto). Opção de **esvaziar a Lixeira** ao concluir (esvazia a Lixeira inteira do Windows — o aviso aparece antes).
 - **Mover = copiar → verificar (nº de arquivos e bytes) → só então apagar a origem**; opcionalmente deixa uma *junction* (atalho de pasta) no local antigo para que programas continuem achando os arquivos.
 - O servidor **só age sobre itens que ele mesmo listou** no scan (nunca aceita caminhos arbitrários), recusa pastas de sistema/perfil e **não segue junctions** ao apagar.
@@ -113,8 +129,10 @@ Issues e PRs são bem-vindos — principalmente novos caches conhecidos, ajustes
    - programs with no recorded use for 180+ days (Windows *UserAssist*), and Steam games not played (Steam `LastPlayed`);
    - well-known caches/temp files (system drive only).
 3. Each item's **path is a clickable link**: one click opens Windows Explorer with the file/folder already selected, so you can check it before deciding.
-4. Two checkbox columns — **Delete** (programs are uninstalled through their own uninstaller) and **Move** — plus a **“Transferir pasta para outro local”** button that opens the Explorer folder picker and shows the chosen path next to the button.
-5. Four footer buttons (apply to the **current tab only**): **Delete everything** · **Delete selected** · **Move specified** · **Delete selected and move**.
+4. Two checkbox columns — **Delete / Uninstall** and **Move** — plus a **“Transferir pasta para outro local”** button that opens the Explorer folder picker and shows the chosen path next to the button. **An installed program's folder is never offered for deletion or moving** (moving would need an uninstall + reinstall): programs and games are offered **for uninstall only**, through their own uninstaller (Steam games through Steam). Folders/files that belong to an installed program, or that contain one, are skipped by the scan.
+5. Eight footer buttons in **three groups** separated by a vertical bar (apply to the **current tab only**): *Files and folders* (delete all files · delete selected files · move specified · delete selected and move), *Programs — uninstall only* (uninstall all programs · uninstall selected programs) and *Files + programs* (delete all files and uninstall programs · delete selected files and programs). The “all” buttons require typing `APAGAR TUDO`, `DESINSTALAR TUDO` or `APAGAR E DESINSTALAR TUDO`. Files go first, programs last, one at a time.
+
+> ⚠️ **Uninstalling programs may require administrator rights.** Uninstallers open the program's own window. Programs installed *for all users* (most of `Program Files`) usually need admin: the panel tags them *“desinstalar pode exigir administrador”* and shows a banner. To avoid errors start the panel as administrator (`app\iniciar-admin.bat`, or choose “Como administrador” in the skill) — Windows shows a UAC prompt that only you can approve. In normal mode you can still try; if the uninstaller needs elevation the panel reports *“exige ADMINISTRADOR (código 740)”* and does **not** mark the program as removed.
 
 ### Safety
 
