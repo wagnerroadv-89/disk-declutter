@@ -2,7 +2,10 @@ LIMPEZA DE DISCO  (v2)
 ======================
 
 Como usar
-  1. Rode  iniciar.bat  (ou a skill /limpeza-de-disco no Claude Code). O painel abre no navegador.
+  1. Rode  iniciar.bat  (modo normal) ou  iniciar-admin.bat  (como administrador: pede a permissao do Windows e libera
+     Windows\Temp, cache do Windows Update e hibernacao). Ou use a skill /limpeza-de-disco no Claude Code: ela
+     pergunta a cada execucao se voce quer iniciar normal ou como administrador e abre o .bat certo.
+     Os dois .bat aceitam --no-browser (nao abrir o navegador sozinho). O painel abre no navegador.
   2. Marque os discos que quer escanear e clique em "Escanear agora". Cada disco ganha uma aba.
   3. Marque, em cada linha, "Apagar" ou "Mover" (para mover, clique em "Transferir pasta para outro local"
      e escolha a pasta de destino, em OUTRO disco).

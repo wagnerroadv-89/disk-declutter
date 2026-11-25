@@ -79,6 +79,13 @@ def is_admin():
         return False
 
 
+def app_version():
+    try:
+        return open(os.path.join(HERE, "VERSION"), encoding="utf-8").read().strip()
+    except OSError:
+        return "?"
+
+
 def norm(p):
     return os.path.normcase(os.path.normpath(p))
 
@@ -465,6 +472,10 @@ class H(http.server.BaseHTTPRequestHandler):
             touch()
             html = open(os.path.join(HERE, "index.html"), encoding="utf-8").read().replace("__TOKEN__", TOKEN)
             return self._send(200, html.encode("utf-8"), "text/html; charset=utf-8")
+        if u.path == "/api/info":
+            # sem token e sem mexer na validade do scan: so diz se e este app e em que modo roda
+            # (usado pela skill para decidir se reaproveita o servidor ou reinicia no modo escolhido)
+            return self._send(200, {"app": "limpeza-de-disco", "admin": is_admin(), "version": app_version()})
         if self.headers.get("X-Token") != TOKEN:
             return self._send(403, {"erro": "token inválido"})
         touch()
