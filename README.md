@@ -58,6 +58,10 @@ Disco cheio e você não sabe o que apagar? O **disk-declutter** varre as unidad
 
   Cada pergunta tem a opção “aplicar a todos os próximos casos iguais nesta operação”. Itens sem resposta em 30 min são pulados. O que foi pulado/parcial aparece com ⏭ / ⚠ na lista e no log.
 
+### Desligar o computador ao terminar
+
+Quarta caixa do rodapé, **desmarcada por padrão**: **“Desligar o computador após finalizar tudo”**. Ao marcá-la e executar uma operação, quando ela **terminar normalmente** o painel agenda o desligamento do Windows com **contagem de 60 s** e mostra um aviso com o botão **Cancelar desligamento** (também dá para cancelar com `shutdown /a`). **Não desliga se a operação for abortada.** A caixa se desmarca sozinha ao iniciar, valendo só para aquela operação, e a confirmação final lembra que o computador será desligado. O comando não usa `/f`: programas com trabalho não salvo podem impedir o desligamento. (Um programa não consegue *ligar* o PC de volta sozinho.)
+
 ### ⚠️ Desinstalar programas pode exigir administrador
 
 - Os desinstaladores abrem a **janela do próprio programa** e você confirma nela. O painel confere no registro do Windows se o programa realmente saiu.
@@ -148,6 +152,8 @@ Issues e PRs são bem-vindos — principalmente novos caches conhecidos, ajustes
 5. Eight footer buttons in **three groups** separated by a vertical bar (apply to the **current tab only**): *Files and folders* (delete all files · delete selected files · move specified · delete selected and move), *Programs — uninstall only* (uninstall all programs · uninstall selected programs) and *Files + programs* (delete all files and uninstall programs · delete selected files and programs). The “all” buttons require typing `APAGAR TUDO`, `DESINSTALAR TUDO` or `APAGAR E DESINSTALAR TUDO`. Files go first, programs last, one at a time.
 
 Progress & control: a fixed top bar shows a progress bar (`NN% / 100%`), and — like the Windows copy dialog — what is being done, bytes done/remaining, MB/s and time left, also shown on each item's row (queued items show “na fila”). **Abortar operação** cancels wherever it is (a partial copy is removed and the source is untouched). **Permission policy:** when the Recycle Bin refuses an item, files are in use/denied, or elevation is needed, the panel pauses and asks (delete permanently / retry / take ownership as admin / skip, with “apply to all”).
+
+**Shutdown when finished:** a fourth checkbox (off by default) schedules a Windows shutdown with a 60 s countdown and a *Cancel* button once the operation finishes normally; never after an abort. It unticks itself after starting.
 
 > ⚠️ **Uninstalling programs may require administrator rights.** Uninstallers open the program's own window. Programs installed *for all users* (most of `Program Files`) usually need admin: the panel tags them *“desinstalar pode exigir administrador”* and shows a banner. To avoid errors start the panel as administrator (`app\iniciar-admin.bat`, or choose “Como administrador” in the skill) — Windows shows a UAC prompt that only you can approve. In normal mode you can still try; if the uninstaller needs elevation the panel reports *“exige ADMINISTRADOR (código 740)”* and does **not** mark the program as removed.
 

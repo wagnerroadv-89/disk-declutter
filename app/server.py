@@ -17,6 +17,8 @@ LOG_FILE = os.environ.get("LIMPEZA_LOG", os.path.join(HERE, "limpeza.log"))
 TEST_PICK = os.environ.get("LIMPEZA_TEST_PICK")          # so para testes automatizados
 _TEST_PICK_N = [0]
 TEST_FAIL_RECYCLE = os.environ.get("LIMPEZA_TEST_FAIL_RECYCLE")    # so para testes: finge que a Lixeira recusou o item
+TEST_NO_SHUTDOWN = os.environ.get("LIMPEZA_TEST_NO_SHUTDOWN")      # so para testes: NAO desliga o computador de verdade
+SHUTDOWN_DELAY = 60                                                # segundos para o usuario cancelar o desligamento
 FIXTURE = os.environ.get("LIMPEZA_FIXTURE")              # so para testes: adiciona um disco falso "T:"
 PORT = int(os.environ.get("LIMPEZA_PORT", "8765"))
 TOKEN = secrets.token_urlsafe(24)
@@ -581,6 +583,36 @@ def run_job(job, ctx, plan, empty_bin=False):
         job["done"] = True
         job["freed"] = freed_total
         ctx.log("%s. Espaço liberado (estimado): %s" % ("Operação ABORTADA" if job.get("aborted") else "Concluído", human(freed_total)))
+        if job.get("want_shutdown"):
+            if job.get("aborted"):
+                ctx.log("Desligamento NÃO agendado: a operação foi abortada.")
+            else:
+                start_shutdown(job, ctx)
+
+
+def start_shutdown(job, ctx):
+    """Agenda o desligamento do Windows com contagem (dá tempo de cancelar). Sem /f: programas com trabalho nao salvo podem bloquear."""
+    ctx.log("⏻ Desligamento do computador agendado em %d s (cancele no painel ou com 'shutdown /a')." % SHUTDOWN_DELAY)
+    if TEST_NO_SHUTDOWN:
+        ctx.log("[teste] o comando de desligamento NÃO foi executado.")
+    else:
+        r = subprocess.run(["shutdown", "/s", "/t", str(SHUTDOWN_DELAY), "/c", "Limpeza de disco concluída: o computador vai desligar. Cancele com: shutdown /a"],
+                           capture_output=True, text=True)
+        if r.returncode != 0:
+            ctx.log("Aviso: não consegui agendar o desligamento (%s)." % (r.stderr or r.stdout).strip())
+            job["shutdown_err"] = (r.stderr or r.stdout).strip()
+            return
+    job["shutdown_at"] = time.time() + SHUTDOWN_DELAY
+
+
+def cancel_shutdown(job, ctx):
+    if not job.get("shutdown_at"):
+        return False
+    if not TEST_NO_SHUTDOWN:
+        subprocess.run(["shutdown", "/a"], capture_output=True, text=True)
+    job["shutdown_at"] = None; job["want_shutdown"] = False
+    ctx.log("Desligamento CANCELADO pelo usuário.")
+    return True
 
 
 def job_view(j):
@@ -605,6 +637,7 @@ def job_view(j):
     if v.get("speed"):
         v["eta_total"] = max(0.0, (total - v["bytes_done"]) / v["speed"])      # tempo estimado para concluir TUDO
     v["elapsed"] = time.time() - j["t0"]
+    v["shutdown_in"] = max(0.0, j["shutdown_at"] - time.time()) if j.get("shutdown_at") else None
     return v
 
 
@@ -749,6 +782,11 @@ class H(http.server.BaseHTTPRequestHandler):
                 return self._send(200, {"started": start_scans([str(x) for x in letters])})
             except ValueError as e:
                 return self._send(400, {"erro": str(e)})
+        if path == "/api/shutdown-cancel":           # cancela o desligamento agendado
+            ctx = CTXS.get(str(body.get("job") or ""))
+            if not ctx or not cancel_shutdown(ctx.job, ctx):
+                return self._send(404, {"erro": "Não há desligamento agendado."})
+            return self._send(200, {"ok": True})
         if path == "/api/abort":                     # botao "Abortar operacao"
             ctx = CTXS.get(str(body.get("job") or ""))
             if not ctx or ctx.job.get("done"):
@@ -841,7 +879,8 @@ class H(http.server.BaseHTTPRequestHandler):
         job = JOBS[jid] = {"id": jid, "log": [], "results": {}, "done": False, "current": None, "total": len(plan), "freed": 0,
                            "items_done": 0, "w_done": 0, "w_total": 1, "cur": None, "cur_done": 0, "prompt": None,
                            "aborting": False, "aborted": False, "t0": time.time(), "drive": str(b.get("drive") or ""),
-                           "plan_ids": [it["id"] for _, it, _ in plan]}
+                           "plan_ids": [it["id"] for _, it, _ in plan],
+                           "want_shutdown": bool(b.get("shutdown")), "shutdown_at": None}
         ctx = CTXS[jid] = JobCtx(job)
         log("=== Nova operação %s: %s | apagar=%d mover=%d lixeira=%s esvaziar_lixeira=%s ===" % (jid, action, len(dels), len(moves), recycle, empty_bin))
 

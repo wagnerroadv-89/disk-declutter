@@ -14,6 +14,8 @@ Como usar
      ATENCAO: desinstalar programas pode exigir ADMINISTRADOR. Programas instalados para todos os usuarios (a maioria,
      em Program Files) costumam pedir isso: use iniciar-admin.bat (o Windows mostra o UAC, que so voce aprova).
      Os botoes ficam em 3 grupos: Arquivos e pastas | Programas (so desinstalar) | Arquivos + programas.
+  3e. DESLIGAR O COMPUTADOR: 4a caixa do rodape (desmarcada por padrao). Ao terminar a operacao normalmente agenda o
+     desligamento com contagem de 60 s e botao "Cancelar desligamento" (ou "shutdown /a"). Nao desliga se abortar.
   3d. ANDAMENTO: painel fixo no topo com barra "NN% / 100%", MB/s, quanto ja foi, quanto falta e tempo restante (tambem na
      linha de cada item; os que nao comecaram ficam "na fila"). Botao "Abortar operacao" cancela onde estiver (mover: a
      copia parcial some e a origem fica intacta). Depois use "Reescanear" para ver so o que restou.

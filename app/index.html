@@ -172,6 +172,7 @@ dialog input[type=text]{width:100%;padding:9px;border:1px solid var(--line);bord
     <label><input type="checkbox" id="optBin" checked> <span>Enviar para a Lixeira (recomendado; o espaço só volta ao esvaziar). Caches são apagados direto.</span></label>
     <label><input type="checkbox" id="optEmpty"> <span>Apagar a Lixeira após concluir a exclusão (esvazia a Lixeira inteira do Windows)</span></label>
     <label><input type="checkbox" id="optJ" checked> <span>Deixar atalho (junction) no local antigo ao mover <span class="na">(se mantida, depois de mover uma pasta o Windows cria no caminho antigo um atalho invisível para a pasta nova; programas e arquivos que ainda procuram no local antigo continuam funcionando, mas sem ocupar espaço lá. Se desmarcar, o caminho antigo deixa de existir e quem usava essa pasta pode parar de achá-la. Vale só para pastas, não para arquivos soltos.)</span></span></label>
+    <label><input type="checkbox" id="optShutdown"> <span><b>Desligar o computador</b> após finalizar tudo <span class="na">(só se a operação terminar sem ser abortada; antes de desligar há uma contagem de 60 s com botão para cancelar. Programas com trabalho não salvo podem impedir o desligamento.)</span></span></label>
     </div>
   </div>
   <div class="bgroups">
@@ -202,6 +203,7 @@ dialog input[type=text]{width:100%;padding:9px;border:1px solid var(--line);bord
     <button class="primary" id="jbRescan" hidden></button>
     <button id="jbClose" hidden>Fechar</button>
   </div>
+  <div id="jbShut" class="warn" hidden style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><b id="jbShutTxt"></b><button class="danger" id="jbShutCancel">Cancelar desligamento</button></div>
   <pre id="log" hidden></pre>
 </div>
 <dialog id="dlgp"><h2>Preciso da sua autorização</h2><div id="dpB"></div><div class="optbtns" id="dpO"></div><label id="dpAllL" style="display:flex;gap:6px;color:var(--muted)"><input type="checkbox" id="dpAll"> <span>Aplicar a todos os próximos casos iguais nesta operação</span></label></dialog>
@@ -537,7 +539,9 @@ async function go(action, scope="files"){
   }
   const ok = await ask({title: action==="delete_all" ? SCOPE_TITLE[scope]+" da aba "+active+"?" : "Confirmar operação", body, yes:"Continuar", danger: action!=="move", needText: action==="delete_all" ? SCOPE_CONFIRM[scope] : null});
   if (!ok) return;
+  const shutdown = $("#optShutdown").checked;
   const resumo = [];
+  if (shutdown) resumo.push("DESLIGAR o computador ao terminar tudo (contagem de 60 s para cancelar)");
   if (filesL.length) resumo.push((action==="delete_all"?"APAGAR TUDO — ":"")+filesL.length+" arquivo(s)/pasta(s) para apagar ("+fmt(filesL.reduce((a,b)=>a+b.size,0))+")");
   if (progsL.length) resumo.push(progsL.length+" programa(s) para desinstalar ("+fmt(progsL.reduce((a,b)=>a+b.size,0))+"), um por vez, pelo desinstalador de cada um");
   if (mv.length) resumo.push(mv.length+" item(ns) para mover ("+fmt(mv.reduce((a,b)=>a+b.size,0))+")");
@@ -545,11 +549,12 @@ async function go(action, scope="files"){
   const ok2 = await ask({title:"Última confirmação", body:[h("p",{},h("b",{text:"Tem certeza?"})," Será executado agora:"), h("ul",{},resumo.map(t=>h("li",{text:t}))), h("p",{class:"na",text:"Depois que começar, o app não desfaz o que foi apagado definitivamente."})],
     yes: action==="move" ? "Sim, tenho certeza — mover" : "Sim, tenho certeza — executar", danger: action!=="move"});
   if (!ok2) return;
-  const payload = {action, scope, drive:active, recycle, junction, emptyBin, confirm:true, confirm2:true, delete: dels.map(x=>x.id), moves: Object.fromEntries(mv.map(x=>[x.id,dest[x.id]]))};
+  const payload = {action, scope, drive:active, recycle, junction, emptyBin, shutdown, confirm:true, confirm2:true, delete: dels.map(x=>x.id), moves: Object.fromEntries(mv.map(x=>[x.id,dest[x.id]]))};
   if (action==="delete_all") payload.confirmText = SCOPE_CONFIRM[scope];
   try{
     const r = await api("/api/run", payload);
     jobBusy = true; jobId = r.job; shownPrompt = null; $("#log").textContent = "";
+    $("#optShutdown").checked = false;           // por segurança vale só para esta operação; marque de novo se quiser repetir
     $("#jobbar").hidden = false; $("#jbRescan").hidden = true; $("#jbClose").hidden = true; $("#jbAbort").hidden = false; $("#jbAbort").disabled = false;
     layoutPads();
     [...dels,...mv].forEach(x=>{ delete results[x.id] });
@@ -605,6 +610,10 @@ function renderJob(j){
   $("#jbAbort").hidden = done; $("#jbAbort").disabled = !!j.aborting;
   $("#jbRescan").hidden = !done; $("#jbClose").hidden = !done;
   if (done && j.drive) $("#jbRescan").textContent = "Reescanear "+j.drive+" agora";
+  const sh = $("#jbShut");
+  if (j.shutdown_in != null){ sh.hidden = false; sh.style.display = "flex"; $("#jbShutTxt").textContent = "⏻ O computador vai DESLIGAR em "+Math.ceil(j.shutdown_in)+" s"; }
+  else if (j.shutdown_err){ sh.hidden = false; sh.style.display = "flex"; $("#jbShutTxt").textContent = "⏻ Não consegui agendar o desligamento: "+j.shutdown_err; $("#jbShutCancel").hidden = true; }
+  else { sh.hidden = true; sh.style.display = "none"; }
   const logEl = $("#log"); logEl.textContent = j.log.join("\n"); if (!logEl.hidden) logEl.scrollTop = 1e9;
   layoutPads();
 }
@@ -629,7 +638,7 @@ async function pollJob(job){
     Object.assign(results, j.results);
     for (const [id,r] of Object.entries(j.results)) { if (r.status==="ok"){ selDel.delete(id); selMove.delete(id); delete dest[id]; } }
     drives.forEach(d=>{ const x=j.drives[d.letter]; if(x){d.free=x.free;d.total=x.total} });
-    if (j.done){ jobBusy = false; renderAll(); return; }
+    if (j.done){ jobBusy = false; renderAll(); if (j.shutdown_in != null && j.shutdown_in > 0) setTimeout(()=>pollJob(job), 1000); return; }   // segue atualizando a contagem do desligamento
     render(); setTimeout(()=>pollJob(job), 900);
   }catch(e){ setTimeout(()=>pollJob(job), 1500); }
 }
@@ -678,6 +687,7 @@ $("#jbAbort").onclick = async ()=>{
 };
 $("#jbLogBtn").onclick = ()=>{ const l = $("#log"); l.hidden = !l.hidden; $("#jbLogBtn").textContent = l.hidden ? "Ver log" : "Ocultar log"; if (!l.hidden) l.scrollTop = 1e9; layoutPads(); };
 $("#jbClose").onclick = hideJobbar;
+$("#jbShutCancel").onclick = async ()=>{ try{ await api("/api/shutdown-cancel", {job:jobId}); $("#jbShut").hidden = true; $("#jbShut").style.display = "none"; await alert_("Desligamento cancelado."); }catch(e){ await alert_(e.message); } };
 $("#jbRescan").onclick = ()=>{ const d = active; hideJobbar(); chosen.clear(); chosen.add(d); startScan(); };
 new ResizeObserver(layoutPads).observe(document.querySelector("footer")); new ResizeObserver(layoutPads).observe($("#jobbar"));
 $("#bAll").onclick = ()=>go("delete_all","files"); $("#bDel").onclick = ()=>go("delete","files"); $("#bMove").onclick = ()=>go("move"); $("#bBoth").onclick = ()=>go("both");
