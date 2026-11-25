@@ -1,0 +1,34 @@
+LIMPEZA DE DISCO  (v2)
+======================
+
+Como usar
+  1. Rode  iniciar.bat  (ou a skill /limpeza-de-disco no Claude Code). O painel abre no navegador.
+  2. Marque os discos que quer escanear e clique em "Escanear agora". Cada disco ganha uma aba.
+  3. Marque, em cada linha, "Apagar" ou "Mover" (para mover, clique em "Transferir pasta para outro local"
+     e escolha a pasta de destino, em OUTRO disco).
+  4. Use os botoes no rodape. Todo botao pede DUAS confirmacoes. Os botoes valem so para a aba aberta.
+
+Validade do scan (v2.1)
+  - O resultado do scan fica SO na memoria do servidor; nada e gravado em disco.
+  - Cada abertura nova do painel comeca na tela inicial (escolher discos) e exige novo scan.
+  - Se voce fechar o painel sem querer, o scan fica guardado por 10 MINUTOS: reabrindo dentro desse prazo as abas voltam
+    (com um aviso dizendo ha quanto tempo foi o scan). Passados os 10 minutos sem o painel aberto, tudo e descartado.
+  - Enquanto o painel estiver aberto, ele envia sinais de vida e o prazo nao corre.
+  - Scan ou limpeza em andamento nunca sao descartados no meio.
+  - Para mudar o prazo: variavel de ambiente LIMPEZA_TTL_SEC (segundos) antes de iniciar o servidor (padrao 600).
+
+O que o scan procura (somente leitura)
+  - Pastas >= 1 GB sem nenhuma modificacao ha 90+ dias, e arquivos grandes parados
+  - Instaladores/compactados antigos (.exe, .msi, .iso, .zip...) >= 200 MB
+  - Programas sem uso registrado pelo Windows ha 180+ dias (registro UserAssist) e jogos Steam sem jogar
+  - Caches e temporarios conhecidos (somente no disco do sistema)
+  Itens de "Cuidado" (documentos pessoais, Java, certificados, ferramentas de desenvolvimento) ficam fora do "Apagar tudo".
+
+Seguranca
+  - O servidor so escuta em 127.0.0.1 e exige um token gerado a cada execucao.
+  - So age sobre itens que ele proprio listou no scan; nunca aceita caminhos arbitrarios.
+  - Mover = copia, verifica (qtd de arquivos e bytes), so entao apaga a origem; opcionalmente deixa uma junction.
+  - Tudo que for feito fica em limpeza.log (nesta pasta).
+  - Itens que exigem administrador (Windows\Temp, cache do Windows Update, hibernacao): use iniciar-admin.bat.
+
+Requisitos: Windows 10/11 e Python 3.9+ (com tkinter, que ja vem no instalador oficial) no PATH.
