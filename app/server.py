@@ -518,9 +518,31 @@ class H(http.server.BaseHTTPRequestHandler):
                 return self._send(200, {"started": start_scans([str(x) for x in letters])})
             except ValueError as e:
                 return self._send(400, {"erro": str(e)})
+        if path == "/api/reveal":
+            return self._reveal(body)
         if path == "/api/run":
             return self._run(body)
         self._send(404, {"erro": "não encontrado"})
+
+    def _reveal(self, b):
+        """Abre o Explorer mostrando o item (seleciona o arquivo/pasta; em caches abre a propria pasta).
+        So aceita o ID de um item listado pelo scan; nao altera nada."""
+        it = ITEMS.get(str(b.get("id") or ""))
+        if not it or not it.get("path"):
+            return self._send(404, {"erro": "Item sem caminho para mostrar."})
+        p = os.path.normpath(it["path"])
+        if not os.path.exists(p):
+            return self._send(404, {"erro": "Este caminho não existe mais (já foi apagado ou movido?)."})
+        if it["kind"] == "conteudo" and os.path.isdir(p):
+            cmd = 'explorer.exe "%s"' % p                  # cache/temporarios: abre dentro da pasta
+        else:
+            cmd = 'explorer.exe /select,"%s"' % p          # seleciona o item na pasta que o contem
+        try:
+            subprocess.Popen(cmd)        # string (nao lista) para o Explorer receber /select,"caminho" exatamente assim
+        except OSError as e:
+            return self._send(500, {"erro": "Não consegui abrir o Explorer: %s" % e})
+        log("Explorer aberto em: %s" % p)
+        self._send(200, {"ok": True})
 
     def _run(self, b):
         action = b.get("action")

@@ -57,6 +57,8 @@ tr.grp .gm{color:var(--muted);font-weight:400;margin-left:8px}
 tbody tr:not(.grp):hover td{background:var(--row)}
 tr.done td{opacity:.55}
 tr.done .nm{text-decoration:line-through}
+.path a.lnk{color:var(--accent);text-decoration:none;cursor:pointer}
+.path a.lnk:hover{text-decoration:underline}
 input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent);cursor:pointer}
 input[type=checkbox]:disabled{cursor:not-allowed;opacity:.35}
 .nm{font-weight:600}
@@ -313,7 +315,8 @@ function row(it){
   const nameTd = h("td",{},
     h("span",{class:"nm",text:it.name}), h("span",{class:"badge b-"+it.risk,text:RISK[it.risk]}),
     it.admin ? h("span",{class:"badge b-admin",text:"requer administrador"}) : null,
-    it.path ? h("div",{class:"path",text:it.path}) : null,
+    it.path ? h("div",{class:"path"}, isDone(it.id) ? it.path :
+      h("a",{href:"#",class:"lnk",title:"Clique para abrir o Explorer e mostrar onde está",onclick:e=>{e.preventDefault();reveal(it)}}, "📂 "+it.path)) : null,
     h("div",{class:"note",text:it.note}),
     r ? h("div",{class:"res "+(r.status==="ok"?"ok":r.status==="info"?"run":"err"),text:(r.status==="ok"?"✔ ":r.status==="info"?"ℹ ":"✖ ")+r.msg}) : null,
     results["_run_"+it.id] ? h("div",{class:"res run",text:"⏳ em andamento…"}) : null);
@@ -348,6 +351,12 @@ function summary(){
 function renderAll(){ renderDrives(); renderTabs(); renderProg(); if (active && scans[active] && scans[active].status==="done") renderTable(); summary(); }
 function render(){ renderTabs(); if (active && scans[active] && scans[active].status==="done") renderTable(); summary(); renderDrivesBars(); }
 function renderDrivesBars(){ /* cartões só mudam em renderAll */ }
+
+// Abre o Explorer do Windows mostrando o item (o navegador não pode abrir o Explorer sozinho; quem faz isso é o servidor local)
+async function reveal(it){
+  try{ await api("/api/reveal", {id: it.id}); }
+  catch(e){ await alert_(e.message); }
+}
 
 async function pickDest(it){
   try{

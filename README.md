@@ -31,8 +31,9 @@ Disco cheio e você não sabe o que apagar? O **disk-declutter** varre as unidad
 
 3. Mostra cada item numa **tabela** com *nome · último uso · tamanho*, um **selo de risco** (*Baixo risco*, *Confirme antes*, *Cuidado*) e uma explicação.
 4. Duas colunas de seleção: **Apagar** (programas são desinstalados pelo próprio desinstalador; jogos Steam pelo Steam) e **Mover**.
-5. Para mover, o botão **“Transferir pasta para outro local”** abre o seletor de pastas do Explorer; o caminho escolhido aparece ao lado do botão.
-6. Quatro botões no rodapé (valem **só para a aba aberta**): **Apagar tudo** · **Apagar selecionados** · **Mover arquivos especificados** · **Apagar selecionados e mover**.
+5. **O caminho de cada item é um link clicável** (📂): um clique abre o Explorer do Windows já com o arquivo/pasta selecionado (em caches, abre dentro da pasta), para você conferir antes de decidir — sem copiar e colar caminhos.
+6. Para mover, o botão **“Transferir pasta para outro local”** abre o seletor de pastas do Explorer; o caminho escolhido aparece ao lado do botão.
+7. Quatro botões no rodapé (valem **só para a aba aberta**): **Apagar tudo** · **Apagar selecionados** · **Mover arquivos especificados** · **Apagar selecionados e mover**.
 
 ### Segurança (o que ele garante e o que não garante)
 
@@ -111,8 +112,9 @@ Issues e PRs são bem-vindos — principalmente novos caches conhecidos, ajustes
    - installers/archives ≥ 200 MB untouched for 60+ days;
    - programs with no recorded use for 180+ days (Windows *UserAssist*), and Steam games not played (Steam `LastPlayed`);
    - well-known caches/temp files (system drive only).
-3. Two checkbox columns — **Delete** (programs are uninstalled through their own uninstaller) and **Move** — plus a **“Transferir pasta para outro local”** button that opens the Explorer folder picker and shows the chosen path next to the button.
-4. Four footer buttons (apply to the **current tab only**): **Delete everything** · **Delete selected** · **Move specified** · **Delete selected and move**.
+3. Each item's **path is a clickable link**: one click opens Windows Explorer with the file/folder already selected, so you can check it before deciding.
+4. Two checkbox columns — **Delete** (programs are uninstalled through their own uninstaller) and **Move** — plus a **“Transferir pasta para outro local”** button that opens the Explorer folder picker and shows the chosen path next to the button.
+5. Four footer buttons (apply to the **current tab only**): **Delete everything** · **Delete selected** · **Move specified** · **Delete selected and move**.
 
 ### Safety
 

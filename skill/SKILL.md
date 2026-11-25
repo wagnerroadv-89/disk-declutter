@@ -44,7 +44,7 @@ Esta skill abre um app local (Python, só `127.0.0.1`) já pronto. O arquivo `te
    No modo admin, avise **antes** que vai aparecer a janela de permissão do Windows. Espere o `APP\server.url` aparecer (até ~60 s; no admin depende do usuário aprovar). Ele contém o endereço (porta padrão 8765; se estiver ocupada o app usa a próxima livre).
    - Confirme com `GET <url>api/info` que `admin` bate com `MODO`. Se escolheu admin e o servidor subiu sem admin (ou nada subiu), o usuário provavelmente recusou o UAC: diga isso e ofereça tentar de novo ou seguir no modo normal.
 7. **Abrir o painel para o usuário**: no app desktop do Claude, abra a URL no navegador embutido (`preview_start` com `url`). Se não houver navegador embutido, use `start <url>` no PowerShell.
-8. **Explique em 3 linhas** o que fazer: marcar os discos, clicar em **Escanear agora** (mais de um disco = uma aba por disco), marcar *Apagar* / *Mover* (e usar "Transferir pasta para outro local" para escolher o destino) e usar os botões do rodapé; cada botão pede duas confirmações e vale só para a aba aberta. Diga em que modo o painel está rodando (normal/administrador).
+8. **Explique em 3 linhas** o que fazer: marcar os discos, clicar em **Escanear agora** (mais de um disco = uma aba por disco), marcar *Apagar* / *Mover* (e usar "Transferir pasta para outro local" para escolher o destino) e usar os botões do rodapé; cada botão pede duas confirmações e vale só para a aba aberta. Avise também que **o caminho de cada item é um link: clicar nele abre o Explorer do Windows já mostrando o arquivo/pasta** (para conferir antes de apagar, sem copiar e colar). Diga em que modo o painel está rodando (normal/administrador).
 
 ## Validade do scan (importante ao reabrir)
 
