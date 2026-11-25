@@ -81,9 +81,9 @@ python -I server.py        # ou dê dois cliques em iniciar.bat
 O navegador abre em `http://127.0.0.1:8765/`. Marque os discos → **Escanear agora**.
 Para itens que exigem administrador (`Windows\Temp`, cache do Windows Update, hibernação) use `iniciar-admin.bat`.
 
-### Como usar como *skill* do Claude Code
+### Como usar como *skill* do Claude
 
-Baixe `limpeza-de-disco-skill.zip` na página de [Releases](https://github.com/wagnerroadv-89/disk-declutter/releases), descompacte em `%USERPROFILE%\.claude\skills\` e rode **`/limpeza-de-disco`**. A skill extrai o app para `%USERPROFILE%\LimpezaDisco`, **pergunta a cada execução se você quer iniciar em modo normal ou como administrador**, abre o `.bat` correspondente (`iniciar.bat` ou `iniciar-admin.bat`) e abre o painel. No modo administrador o Windows mostra a janela de permissão (UAC), que só você pode aprovar. Se já houver um painel rodando no modo escolhido, ele é reaproveitado; se o modo for diferente, o servidor é reiniciado (e o scan guardado é descartado). (Ou, do repositório: `python tools/build_zip.py --install`.)
+Baixe `limpeza-de-disco-skill.zip` (ou `limpeza-de-disco.skill`, mesmo conteúdo) na página de [Releases](https://github.com/wagnerroadv-89/disk-declutter/releases) e **envie no Claude** (*Plugins → Enviar skill*: o pacote **não tem zip aninhado**, que o enviador recusa) ou descompacte em `%USERPROFILE%\.claude\skills\`; depois rode **`/limpeza-de-disco`**. A skill copia o app (pasta `app/` do pacote) para `%USERPROFILE%\LimpezaDisco`, **pergunta a cada execução se você quer iniciar em modo normal ou como administrador**, abre o `.bat` correspondente (`iniciar.bat` ou `iniciar-admin.bat`) e abre o painel. No modo administrador o Windows mostra a janela de permissão (UAC), que só você pode aprovar. Se já houver um painel rodando no modo escolhido, ele é reaproveitado; se o modo for diferente, o servidor é reiniciado (e o scan guardado é descartado). (Ou, do repositório: `python tools/build_zip.py --install`.)
 
 ### Personalizar
 
@@ -152,7 +152,7 @@ python -I server.py
 
 Open `http://127.0.0.1:8765/`, tick the drives, press **Escanear agora**. Use `iniciar-admin.bat` for admin-only items.
 
-**As a Claude Code skill:** download `limpeza-de-disco-skill.zip` from [Releases](https://github.com/wagnerroadv-89/disk-declutter/releases), unzip into `%USERPROFILE%\.claude\skills\`, run `/limpeza-de-disco`. Every run the skill asks whether to start **normally or as administrator** and launches the matching `.bat` (the Windows UAC prompt must be approved by you).
+**As a Claude skill:** download `limpeza-de-disco-skill.zip` (or `limpeza-de-disco.skill`, same content) from [Releases](https://github.com/wagnerroadv-89/disk-declutter/releases) and either upload it in Claude (*Plugins → Upload skill*; the package has **no nested zip**, which the uploader rejects) or unzip it into `%USERPROFILE%\.claude\skills\`; then run `/limpeza-de-disco`. Every run the skill asks whether to start **normally or as administrator** and launches the matching `.bat` (the Windows UAC prompt must be approved by you).
 
 The UI is in Brazilian Portuguese; translations are welcome via PR. Tunable thresholds and regexes are at the top of [`app/scanner.py`](app/scanner.py).
 

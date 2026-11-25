@@ -5,7 +5,7 @@ description: Abre o painel de Limpeza de disco (app local). Toda vez que roda, p
 
 # Limpeza de disco
 
-Esta skill abre um app local (Python, só `127.0.0.1`) já pronto. O arquivo `templates.zip`, nesta mesma pasta da skill, contém o app inteiro: `server.py`, `scanner.py`, `index.html`, `iniciar.bat`, `iniciar-admin.bat`, `LEIA-ME.txt` e `VERSION`.
+Esta skill abre um app local (Python, só `127.0.0.1`) já pronto. A subpasta **`app/`**, ao lado deste `SKILL.md`, contém o app inteiro: `server.py`, `scanner.py`, `index.html`, `iniciar.bat`, `iniciar-admin.bat`, `LEIA-ME.txt` e `VERSION`. (Não há zip dentro da skill: o uploader de skills do Claude recusa zips aninhados.)
 
 ## Regras que valem sempre
 
@@ -19,13 +19,14 @@ Esta skill abre um app local (Python, só `127.0.0.1`) já pronto. O arquivo `te
 ## Passo a passo
 
 1. **Pasta de trabalho**: `%USERPROFILE%\LimpezaDisco` (use outra se o usuário indicar). Guarde em `APP`.
-2. **Instalar/atualizar os arquivos** (só se `APP\server.py` não existir ou `APP\VERSION` for diferente da versão dentro do zip). O zip está em `%USERPROFILE%\.claude\skills\limpeza-de-disco\templates.zip`:
+2. **Instalar/atualizar os arquivos** (só se `APP\server.py` não existir ou `APP\VERSION` for diferente de `<pasta da skill>\app\VERSION`). `<pasta da skill>` (`$SK`) é a pasta onde está este `SKILL.md`: o Claude informa o diretório base ao carregar a skill; se não souber, procure `limpeza-de-disco\app\server.py` em `%USERPROFILE%\.claude\skills\` e nas pastas de skills do app desktop (`%APPDATA%\Claude`, `%USERPROFILE%\.claude`), ou peça o caminho ao usuário.
    ```powershell
+   $SK  = '<pasta onde está este SKILL.md>'                      # ex.: $env:USERPROFILE\.claude\skills\limpeza-de-disco
    $APP = Join-Path $env:USERPROFILE 'LimpezaDisco'
    New-Item -ItemType Directory -Force $APP | Out-Null
-   Expand-Archive -LiteralPath (Join-Path $env:USERPROFILE '.claude\skills\limpeza-de-disco\templates.zip') -DestinationPath $APP -Force
+   Copy-Item -Path (Join-Path $SK 'app\*') -Destination $APP -Recurse -Force
    ```
-   O `limpeza.log` do usuário fica na pasta e não está no zip, então não é sobrescrito.
+   O `limpeza.log` e o marcador `.aviso-desinstalar-visto` do usuário ficam em `APP` e não existem em `app\`, então não são sobrescritos. Se você não puder ler/copiar arquivos do Windows do usuário (ex.: a skill roda num sandbox sem acesso ao PC), diga isso e pare: o app precisa rodar no Windows dele.
 3. **Checar Python com tkinter**: `python -I -c "import tkinter, winreg; print('ok')"`. Se falhar, diga ao usuário que precisa instalar o Python oficial (python.org) com a opção "tcl/tk" e pare.
 4. **Aviso da primeira execução + perguntar como iniciar.**
    - **Aviso (só na PRIMEIRA vez que a skill roda neste computador)**: se o arquivo `APP\.aviso-desinstalar-visto` **não existir**, diga ao usuário, em texto claro e **antes** de perguntar o modo, o aviso abaixo; depois crie esse arquivo (vazio) para não repetir:
