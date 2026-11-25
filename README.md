@@ -33,6 +33,8 @@ Disco cheio e você não sabe o que apagar? O **disk-declutter** varre as unidad
 4. Duas colunas de seleção: **Apagar / Desinstalar** e **Mover**. **A pasta de um programa instalado nunca é oferecida para apagar nem para mover** (mover exigiria desinstalar e reinstalar): programas e jogos aparecem **só para desinstalar** — pelo desinstalador do próprio programa (jogos Steam, pelo Steam). Pastas e arquivos que pertencem a um programa instalado (ou que *contêm* um) são ignorados no scan.
 5. **O caminho de cada item é um link clicável** (📂): um clique abre o Explorer do Windows já com o arquivo/pasta selecionado (em caches, abre dentro da pasta), para você conferir antes de decidir — sem copiar e colar caminhos.
 6. Para mover, o botão **“Transferir pasta para outro local”** abre o seletor de pastas do Explorer; o caminho escolhido aparece ao lado do botão.
+   - **Reaproveitar destinos:** depois de escolher um caminho aparece o botão pequeno **“Usar este local para os demais arquivos selecionados para mover?”** com o status **Não/Sim** (começa em *Não*). Em *Sim*, tudo que você marcar em **Mover** daí em diante já recebe esse mesmo caminho. Se você escolher um **segundo local diferente**, o modo volta para *Não*.
+   - Com o modo em *Não*, cada vez que você marcar **Mover**, um popup pergunta se quer usar **um dos caminhos já utilizados** (lista rolável, mais recente primeiro; **Sim** + **Confirmar**) ou escolher outro (**Não** + **Confirmar**, e então use “Transferir…”). Os caminhos novos entram na lista de forma acumulada.
 7. Oito botões no rodapé, em **três grupos** separados por uma barra vertical (valem **só para a aba aberta**):
 
    | Grupo | Botões |

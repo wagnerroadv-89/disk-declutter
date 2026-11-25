@@ -15,6 +15,7 @@ import scanner
 
 LOG_FILE = os.environ.get("LIMPEZA_LOG", os.path.join(HERE, "limpeza.log"))
 TEST_PICK = os.environ.get("LIMPEZA_TEST_PICK")          # so para testes automatizados
+_TEST_PICK_N = [0]
 FIXTURE = os.environ.get("LIMPEZA_FIXTURE")              # so para testes: adiciona um disco falso "T:"
 PORT = int(os.environ.get("LIMPEZA_PORT", "8765"))
 TOKEN = secrets.token_urlsafe(24)
@@ -386,8 +387,10 @@ def run_job(job, plan, empty_bin=False):
 
 
 def pick_folder():
-    if TEST_PICK:
-        return TEST_PICK
+    if TEST_PICK:                      # teste: "a|b|c" devolve a, b, c... em sequencia (e repete o ultimo)
+        parts = TEST_PICK.split("|")
+        _TEST_PICK_N[0] += 1
+        return parts[min(_TEST_PICK_N[0], len(parts)) - 1]
     code = ("import tkinter as tk\nfrom tkinter import filedialog\nr=tk.Tk(); r.withdraw(); r.attributes('-topmost',True)\n"
             "p=filedialog.askdirectory(title='Escolha a pasta de destino (para onde mover)', mustexist=True)\n"
             "print(p or '')")

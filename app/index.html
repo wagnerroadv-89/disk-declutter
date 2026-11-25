@@ -82,6 +82,9 @@ button.sm{padding:4px 9px;font-size:12.5px}
 button.big{padding:10px 20px;font-size:15px}
 .dest{display:block;margin-top:6px;font:12px Consolas,monospace;word-break:break-all;color:var(--ok)}
 .dest a{color:var(--muted);cursor:pointer;margin-left:6px;text-decoration:none}
+.reuse{margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px}
+.reuse b.on{color:var(--ok)} .reuse b.off{color:var(--muted)}
+select.destlist{width:100%;font:12px Consolas,monospace;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:4px}
 .na{color:var(--muted);font-size:12px}
 .res{margin-top:4px;font-size:12.5px;font-weight:600}
 .res.ok{color:var(--ok)} .res.err{color:var(--bad)} .res.run{color:var(--accent)}
@@ -154,6 +157,7 @@ dialog input[type=text]{width:100%;padding:9px;border:1px solid var(--line);bord
 <footer><div class="fin">
   <div class="sum">
     <span id="sum">Escaneie um disco para começar.</span>
+    <span id="reuseStat" class="na"></span>
     <label><input type="checkbox" id="optBin" checked> <span>Enviar para a Lixeira (recomendado; o espaço só volta ao esvaziar). Caches são apagados direto.</span></label>
     <label><input type="checkbox" id="optEmpty"> <span>Apagar a Lixeira após concluir a exclusão (esvazia a Lixeira inteira do Windows)</span></label>
     <label><input type="checkbox" id="optJ" checked> <span>Deixar atalho (junction) no local antigo ao mover <span class="na">(se mantida, depois de mover uma pasta o Windows cria no caminho antigo um atalho invisível para a pasta nova; programas e arquivos que ainda procuram no local antigo continuam funcionando, mas sem ocupar espaço lá. Se desmarcar, o caminho antigo deixa de existir e quem usava essa pasta pode parar de achá-la. Vale só para pastas, não para arquivos soltos.)</span></span></label>
@@ -309,7 +313,7 @@ function renderTable(){
       lastCat = it.cat;
       const grp = vis.filter(x => x.cat === it.cat);
       const gd = h("input",{type:"checkbox",title:"Marcar o grupo para apagar",onchange:e=>{grp.forEach(x=>setDel(x,e.target.checked&&canDel(x)));render()}});
-      const gm = h("input",{type:"checkbox",title:"Marcar o grupo para mover",onchange:e=>{grp.forEach(x=>{if(canMove(x))setMove(x,e.target.checked)});render()}});
+      const gm = h("input",{type:"checkbox",title:"Marcar o grupo para mover",onchange:e=>markMove(grp,e.target.checked)});
       gd.checked = grp.filter(canDel).length>0 && grp.filter(canDel).every(x=>selDel.has(x.id));
       gm.checked = grp.filter(canMove).length>0 && grp.filter(canMove).every(x=>selMove.has(x.id));
       gd.disabled = !grp.some(canDel) || busy(); gm.disabled = !grp.some(canMove) || busy();
@@ -326,7 +330,7 @@ function renderTable(){
 function row(it){
   const cd = h("input",{type:"checkbox","aria-label":"Apagar "+it.name,onchange:e=>{setDel(it,e.target.checked);render()}});
   cd.checked = selDel.has(it.id); cd.disabled = !canDel(it) || busy();
-  const cm = h("input",{type:"checkbox","aria-label":"Mover "+it.name,onchange:e=>{setMove(it,e.target.checked);render()}});
+  const cm = h("input",{type:"checkbox","aria-label":"Mover "+it.name,onchange:e=>markMove([it],e.target.checked)});
   cm.checked = selMove.has(it.id); cm.disabled = !canMove(it) || busy();
   if (!it.movable) cm.title = it.kind==="programa" ? "Programas instalados não podem ser movidos sem desinstalar e reinstalar." : "Este item não pode ser movido.";
   const verb = it.kind==="programa" ? "desinstalar" : it.kind==="conteudo" ? "esvaziar" : "apagar";
@@ -343,7 +347,9 @@ function row(it){
   let tr;
   if (it.movable){
     tr = h("td",{class:"tr"}, h("button",{class:"sm",disabled:busy()||isDone(it.id),onclick:()=>pickDest(it)}, it.kind==="arquivo"?"Transferir arquivo para outro local":"Transferir pasta para outro local"),
-      dest[it.id] ? h("span",{class:"dest"}, "→ "+dest[it.id], h("a",{title:"Remover destino",onclick:()=>{delete dest[it.id];selMove.delete(it.id);render()}},"✕")) : null);
+      dest[it.id] ? h("span",{class:"dest"}, "→ "+dest[it.id], h("a",{title:"Remover destino",onclick:()=>{delete dest[it.id];selMove.delete(it.id);render()}},"✕")) : null,
+      (lastPick && lastPick.id===it.id && dest[it.id]===lastPick.path && !isDone(it.id)) ?
+        h("div",{class:"reuse"}, h("button",{class:"sm",disabled:busy(),onclick:toggleReuse},"Usar este local para os demais arquivos selecionados para mover?"), h("b",{class:reuseOn?"on":"off",text:reuseOn?"Sim":"Não"})) : null);
   } else {
     tr = h("td",{class:"tr"}, h("span",{class:"na",text:it.kind==="programa"?"Programa instalado: não dá para mover sem reinstalar":it.kind==="conteudo"?"Cache: não precisa mover":"Não movível"}));
   }
@@ -365,6 +371,8 @@ function summary(){
     active+" — Apagar: "+selF.length+" arquivo(s) ("+fmt(sum(selF))+")  ·  Desinstalar: "+selP.length+" programa(s) ("+fmt(sum(selP))+")  ·  Mover: "+mv.length+" ("+fmt(sum(mv))+")" +
     (miss ? "  ·  "+miss+" marcado(s) para mover sem destino" : "");
   $("#scopeNote").textContent = active ? "Os botões valem só para a aba "+active+(other?" ("+other+" marcado(s) em outras abas não serão afetados)":"") : "";
+  const rs = $("#reuseStat"); rs.replaceChildren();
+  if (reuseOn) rs.append("📌 Mover para o mesmo local (automático): ", h("b",{text:reusePath})," ", h("button",{class:"sm",onclick:toggleReuse},"Desligar"));
   const ready = active && scans[active] && scans[active].status==="done" && !busy();
   const allF = mine().filter(x=>!isProg(x)&&x.risk!=="alto"&&canDel(x)), allP = mine().filter(x=>isProg(x)&&x.risk!=="alto"&&canDel(x));
   $("#bAll").disabled   = !ready || !allF.length;                       // arquivos
@@ -386,13 +394,60 @@ async function reveal(it){
   catch(e){ await alert_(e.message); }
 }
 
+// ---------- destinos de "Mover": lista acumulada + "usar o mesmo local para os demais"
+const usedDests = [];                         // caminhos já escolhidos nesta sessão (acumulativo)
+let reuseOn = false, reusePath = null, lastPick = null;   // lastPick = último caminho escolhido à mão {id, path}
+const sameDrive = (a,b) => a.slice(0,2).toUpperCase() === b.slice(0,2).toUpperCase();
+function toggleReuse(){
+  if (reuseOn){ reuseOn = false; reusePath = null; }
+  else if (lastPick){ reuseOn = true; reusePath = lastPick.path; }
+  render();
+}
+function applyDest(list, path){                // devolve os itens que não puderam receber (mesmo disco do destino)
+  const skipped = [];
+  for (const x of list){ if (sameDrive(x.path, path)) skipped.push(x); else dest[x.id] = path; }
+  return skipped;
+}
+// Popup: "quer usar algum dos caminhos já usados?" (Sim -> lista rolável + Confirmar; Não -> fecha e você escolhe à mão)
+async function askReuse(n){
+  const sel = h("select",{size:Math.min(6,Math.max(2,usedDests.length)),class:"destlist","aria-label":"Caminhos já usados"},
+    usedDests.slice().reverse().map((p,i)=>h("option",{value:p,selected:i===0,text:p})));
+  const rSim = h("input",{type:"radio",name:"reuse",checked:true}), rNao = h("input",{type:"radio",name:"reuse"});
+  const box = h("div",{style:"margin:8px 0"}, sel);
+  rSim.addEventListener("change",()=>{box.hidden=false}); rNao.addEventListener("change",()=>{box.hidden=true});
+  const ok = await ask({title:"Local para mover", danger:false, yes:"Confirmar", body:[
+    h("p",{text:"Você marcou "+n+" item(ns) para mover. Quer usar um dos caminhos que já usou antes?"}),
+    h("label",{},rSim," Sim, escolher um dos caminhos já usados"), h("br"),
+    h("label",{},rNao," Não, vou escolher outro caminho manualmente (clique em “Transferir…”)"), box]});
+  if (!ok || !rSim.checked) return null;
+  return sel.value || null;
+}
+// Marca/desmarca "Mover" (uma linha, um grupo ou todos) já cuidando do destino
+async function markMove(list, on){
+  list = list.filter(canMove);
+  list.forEach(x=>setMove(x,on)); render();
+  if (!on) return;
+  const need = list.filter(x=>selMove.has(x.id) && !dest[x.id]);
+  if (!need.length) return;
+  let path = null;
+  if (reuseOn) path = reusePath;
+  else if (usedDests.length) path = await askReuse(need.length);
+  if (!path) return;
+  const skipped = applyDest(need, path);
+  render();
+  if (skipped.length) await alert_("Estes itens estão no mesmo disco do destino ("+path.slice(0,2)+") e não liberariam espaço; escolha outro disco para eles: "+skipped.slice(0,5).map(x=>x.name).join("; ")+(skipped.length>5?"…":""));
+}
 async function pickDest(it){
   try{
     const r = await api("/api/pick-folder", {});
     if (!r.path) return;
     const src = it.path.slice(0,2).toUpperCase();
     if (r.path.slice(0,2).toUpperCase() === src) { await alert_("Escolha uma pasta em OUTRO disco (diferente de "+src+"). Mover dentro do mesmo disco não libera espaço."); return; }
-    dest[it.id] = r.path; setMove(it,true); render();
+    dest[it.id] = r.path; setMove(it,true);
+    if (!usedDests.includes(r.path)) usedDests.push(r.path);          // lista acumulada
+    if (reuseOn && r.path !== reusePath){ reuseOn = false; reusePath = null; }   // mais de um local: desliga o "mesmo local"
+    lastPick = {id: it.id, path: r.path};
+    render();
   }catch(e){ await alert_("Não consegui abrir o seletor de pastas: "+e.message); }
 }
 
@@ -512,7 +567,7 @@ async function refresh(){
 }
 $("#q").addEventListener("input",render); $("#fRisk").addEventListener("change",render); $("#fCat").addEventListener("change",render);
 $("#allDel").addEventListener("change",e=>{visible().forEach(x=>setDel(x,e.target.checked&&canDel(x)));render()});
-$("#allMove").addEventListener("change",e=>{visible().forEach(x=>{if(canMove(x))setMove(x,e.target.checked)});render()});
+$("#allMove").addEventListener("change",e=>markMove(visible(),e.target.checked));
 $("#optEmpty").addEventListener("change",e=>{ if (e.target.checked) $("#optBin").checked = false; });
 $("#optBin").addEventListener("change",e=>{ if (e.target.checked && $("#optEmpty").checked) $("#optEmpty").checked = false; });
 $("#bScan").onclick = startScan;
